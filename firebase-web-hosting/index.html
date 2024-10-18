@@ -3,33 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Static Website</title>
+    <title>Games and Memes</title>
     <link rel="stylesheet" href="style.css">
-    <script defer src="scripts/main.js"></script>
 </head>
 <body>
-    <section id="section1" class="page-section">
-        <h1>Welcome to Section 1</h1>
-        <p>Content for section 1 goes here.</p>
-    </section>
 
-    <!-- New Button -->
-    <section id="section4" class="page-section">
-        <button onclick="window.location.href='game.html';">Play the Game</button>
-    </section>
-    
-    <section id="section2" class="page-section">
-        <h1>Welcome to Section 2</h1>
-        <p>Content for section 2 goes here.</p>
-    </section>
-    
-    <section id="section3" class="page-section">
-        <h1>Welcome to Section 3</h1>
-        <p>Content for section 3 goes here.</p>
-    </section>
+    <!-- Snake Game Button -->
+    <div id="snakeGameButton" class="full-width-button" onclick="window.location.href='game.html';">
+        Snake Game
+    </div>
 
-    <section id="counter" class="page-section">
-        <h1>Counter</h1>
-        <p>Count: <span id="count">0</span></p>
+    <!-- Random Meme Button -->
+    <div id="randomMemeButton" class="full-width-button meme-button" onclick="window.location.href='meme.html';">
+        Random Meme
+    </div>
+
 </body>
 </html>

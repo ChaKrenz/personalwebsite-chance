@@ -3,72 +3,136 @@ class Game {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
         this.score = 0;
+        this.snake = [{ x: 50, y: 50 }]; // Snake starts as a single block
+        this.direction = { x: 10, y: 0 }; // Initial movement to the right
+        this.blockSize = 10;
+        this.speed = 100; // Lower is faster
+        this.isGameOver = false;
 
-        // Define the shapes (example rectangles here)
-        this.shapes = [
-            { x: 50, y: 50, width: 50, height: 50, name: 'Main' },
-            { x: 150, y: 150, width: 50, height: 50, name: 'collectable' },
-            { x: 250, y: 250, width: 50, height: 50, name: 'collectable' }
-        ];
-
-        // Start game loop
-        this.update();
+        // Generate the first apple
+        this.apple = this.generateApple();
 
         // Handle keyboard input
         document.addEventListener('keydown', (e) => this.handleInput(e));
+
+        // Start the game loop
+        this.gameLoop();
+    }
+
+    handleInput(e) {
+        // Prevent reverse movement
+        if (e.key === 'ArrowUp' && this.direction.y === 0) {
+            this.direction = { x: 0, y: -this.blockSize };
+        } else if (e.key === 'ArrowDown' && this.direction.y === 0) {
+            this.direction = { x: 0, y: this.blockSize };
+        } else if (e.key === 'ArrowLeft' && this.direction.x === 0) {
+            this.direction = { x: -this.blockSize, y: 0 };
+        } else if (e.key === 'ArrowRight' && this.direction.x === 0) {
+            this.direction = { x: this.blockSize, y: 0 };
+        }
+    }
+
+    gameLoop() {
+        if (this.isGameOver) {
+            this.displayGameOver();
+            return;
+        }
+
+        this.update();
+        this.redraw();
+
+        setTimeout(() => this.gameLoop(), this.speed);
+    }
+
+    update() {
+        // Move the snake
+        const newHead = {
+            x: this.snake[0].x + this.direction.x,
+            y: this.snake[0].y + this.direction.y
+        };
+
+        // Check collision with walls or self
+        if (this.checkCollisionWithWalls(newHead) || this.checkCollisionWithSelf(newHead)) {
+            this.isGameOver = true;
+        }
+
+        this.snake.unshift(newHead); // Add the new head to the front
+
+        // Check if snake eats the apple
+        if (this.checkCollision(newHead, this.apple)) {
+            this.score++;
+            this.apple = this.generateApple(); // Generate new apple position
+        } else {
+            this.snake.pop(); // Remove the tail if no apple is eaten
+        }
     }
 
     redraw() {
         // Clear the canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw each shape
-        for (const shape of this.shapes) {
-            this.ctx.fillRect(shape.x, shape.y, shape.width, shape.height);
+        // Draw the snake
+        for (const segment of this.snake) {
+            this.ctx.fillStyle = 'green';
+            this.ctx.fillRect(segment.x, segment.y, this.blockSize, this.blockSize);
         }
+
+        // Draw the apple
+        this.ctx.fillStyle = 'red';
+        this.ctx.fillRect(this.apple.x, this.apple.y, this.blockSize, this.blockSize);
+
+        // Display the score
+        this.ctx.fillStyle = 'black';
+        this.ctx.font = '20px Arial';
+        this.ctx.fillText(`Score: ${this.score}`, 10, 20);
     }
 
-    handleInput(e) {
-        // Example: Move the first shape to the right when the right arrow key is pressed
-        if (e.key === 'ArrowRight') {
-            this.shapes[0].x += 10;
-        } else if (e.key === 'ArrowDown') {
-            this.shapes[0].y += 10;
+    generateApple() {
+        let applePosition;
+
+        // Keep generating a new apple position until it doesn't collide with the snake
+        while (true) {
+            const x = Math.floor(Math.random() * (this.canvas.width / this.blockSize)) * this.blockSize;
+            const y = Math.floor(Math.random() * (this.canvas.height / this.blockSize)) * this.blockSize;
+
+            applePosition = { x, y };
+
+            // Ensure the apple does not spawn on the snake
+            if (!this.snake.some(segment => segment.x === x && segment.y === y)) {
+                break; // Exit the loop if apple is not on the snake
+            }
         }
-        // ... You can add more controls here.
+
+        console.log(`Generated new apple at: (${applePosition.x}, ${applePosition.y})`); // Debugging log to check apple position
+
+        return applePosition;
     }
 
     checkCollision(obj1, obj2) {
-        // Check if the two objects are colliding
-        return obj1.x < obj2.x + obj2.width &&
-               obj1.x + obj1.width > obj2.x &&
-               obj1.y < obj2.y + obj2.height &&
-               obj1.y + obj1.height > obj2.y;
+        // Check if two objects (snake head and apple) collide
+        return obj1.x === obj2.x && obj1.y === obj2.y;
     }
 
-    update() {
-        this.redraw();
+    checkCollisionWithWalls(head) {
+        // Check if the snake's head hits the walls
+        return head.x < 0 || head.y < 0 || head.x >= this.canvas.width || head.y >= this.canvas.height;
+    }
 
-        // Example collision check between the first and second shapes
-        if (this.checkCollision(this.shapes[0], this.shapes[1])) {
-            console.log('Collision detected between shape 1 and 2!');
+    checkCollisionWithSelf(head) {
+        // Check if the snake's head collides with its body
+        return this.snake.slice(1).some(segment => segment.x === head.x && segment.y === head.y);
+    }
 
-            // Increase the score
-            this.incorrectScoreVariableNameChangeThisTo_score++;
+    displayGameOver() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillStyle = 'red';
+        this.ctx.font = '40px Arial';
+        this.ctx.fillText('Game Over', 100, 200);
 
-            // Remove the second shape from the array
-            this.shapes.splice(1, 1);
-        }
-
-        // Use requestAnimationFrame for smooth animations
-        requestAnimationFrame(() => this.update());
+        this.ctx.font = '20px Arial';
+        this.ctx.fillText(`Final Score: ${this.score}`, 130, 240);
     }
 }
 
 // Initialize the game
 document.myGame = new Game();
-
-
-
-// log the score once every second
-setInterval(() => console.log(document.myGame.score), 1000);
