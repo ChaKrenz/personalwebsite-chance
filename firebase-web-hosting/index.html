@@ -3,20 +3,406 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Games and Memes</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Chance Krenzer's Website</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000033;
+        }
+        #name {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            z-index: 10;
+            color: white;
+        }
+        #github-link {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 5px;
+            z-index: 10;
+        }
+        #games-dropdown {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+        #snake-color-picker {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 10;
+        }
+        #snake-game {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            z-index: 20;
+            border: 5px solid #4CAF50;
+            background-color: #000033;
+        }
+        #back-button {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            z-index: 30;
+            display: none;
+        }
+    </style>
 </head>
 <body>
-
-    <!-- Snake Game Button -->
-    <div id="snakeGameButton" class="full-width-button" onclick="window.location.href='game.html';">
-        Snake Game
+    <div id="name">Chance Krenzer</div>
+    <a id="github-link" href="https://github.com/ChaKrenz" target="_blank">My GitHub</a>
+    <div id="games-dropdown">
+        <button onclick="toggleDropdown()">Games</button>
+        <div id="dropdown-content" style="display: none;">
+            <a href="#" onclick="startSnakeGame()">Snake Game</a>
+        </div>
     </div>
-
-    <!-- Random Meme Button -->
-    <div id="randomMemeButton" class="full-width-button meme-button" onclick="window.location.href='meme.html';">
-        Random Meme
+    <div id="snake-color-picker">
+        <label for="snake-color">Snake color:</label>
+        <input type="color" id="snake-color" onchange="changeSnakeColor()" value="#00FF00">
     </div>
+    <div id="snake-game">
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+    </div>
+    <button id="back-button" onclick="backToMain()">Back to Main Page</button>
 
+    <script>
+        let particles = [];
+        let shapes = [];
+        let mainSketch;
+        let snakeColor = '#00FF00';
+
+        function setup() {
+            mainSketch = createCanvas(windowWidth, windowHeight);
+            colorMode(RGB, 255, 255, 255, 1);
+            for (let i = 0; i < 20; i++) {
+                shapes.push(new FloatingShape());
+            }
+        }
+
+        function draw() {
+            background(0, 0, 51);
+            fill(0, 0, 0, 0.3);
+            rect(0, 0, width, height);
+            updateShapes();
+            updateParticles();
+        }
+
+        class FloatingShape {
+            constructor() {
+                this.x = random(width);
+                this.y = random(height);
+                this.size = random(20, 100);
+                this.speedX = random(-0.5, 0.5);
+                this.speedY = random(-0.5, 0.5);
+                this.color = color(random(100, 200), random(100, 200), 255, 0.5);
+                this.type = random(['rect', 'ellipse', 'triangle']);
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                if (this.x < 0 || this.x > width) this.speedX *= -1;
+                if (this.y < 0 || this.y > height) this.speedY *= -1;
+            }
+
+            display() {
+                fill(this.color);
+                noStroke();
+
+                push();
+                translate(this.x, this.y);
+                if (this.type === 'rect') {
+                    rect(0, 0, this.size, this.size);
+                } else if (this.type === 'ellipse') {
+                    ellipse(0, 0, this.size, this.size);
+                } else {
+                    triangle(0, -this.size/2, -this.size/2, this.size/2, this.size/2, this.size/2);
+                }
+                pop();
+            }
+        }
+
+        function updateShapes() {
+            for (let shape of shapes) {
+                shape.update();
+                shape.display();
+            }
+        }
+
+        function updateParticles() {
+            particles.push(new Particle(mouseX, mouseY));
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].display();
+                if (particles[i].isDead()) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        class Particle {
+            constructor(x, y) {
+                this.pos = createVector(x, y);
+                this.vel = p5.Vector.random2D().mult(random(1, 3));
+                this.acc = createVector(0, 0.1);
+                this.lifetime = 255;
+                this.size = random(5, 15);
+                this.type = random(['rect', 'ellipse', 'triangle']);
+            }
+
+            update() {
+                this.vel.add(this.acc);
+                this.pos.add(this.vel);
+                this.lifetime -= 5;
+            }
+
+            display() {
+                noStroke();
+                fill(color(snakeColor));
+                push();
+                translate(this.pos.x, this.pos.y);
+                if (this.type === 'rect') {
+                    rect(0, 0, this.size, this.size);
+                } else if (this.type === 'ellipse') {
+                    ellipse(0, 0, this.size, this.size);
+                } else {
+                    triangle(0, -this.size/2, -this.size/2, this.size/2, this.size/2, this.size/2);
+                }
+                pop();
+            }
+
+            isDead() {
+                return this.lifetime < 0;
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+        }
+
+        function toggleDropdown() {
+            let content = document.getElementById("dropdown-content");
+            content.style.display = content.style.display === "none" ? "block" : "none";
+        }
+
+        function changeSnakeColor() {
+            snakeColor = document.getElementById("snake-color").value;
+        }
+
+        // Snake Game Code
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const gridSize = 20;
+        const tileCount = canvas.width / gridSize;
+
+        let snake = [
+            {x: 10, y: 10},
+        ];
+        let apple = {x: 15, y: 15};
+        let dx = 0;
+        let dy = 0;
+        let score = 0;
+        let gameLoopInterval;
+
+        function drawGame() {
+            clearCanvas();
+            moveSnake();
+            drawApple();
+            drawSnake();
+            drawBorder();
+            checkCollision();
+            checkAppleCollision();
+            drawScore();
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#000033';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawSnake() {
+            ctx.fillStyle = snakeColor;
+            snake.forEach((segment, index) => {
+                if (index === 0) {
+                    drawSnakeHead(segment.x, segment.y);
+                } else {
+                    ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize - 2, gridSize - 2);
+                }
+            });
+        }
+
+        function drawSnakeHead(x, y) {
+            ctx.fillRect(x * gridSize, y * gridSize, gridSize - 2, gridSize - 2);
+            
+            // Draw eyes
+            ctx.fillStyle = 'white';
+            ctx.fillRect((x * gridSize) + 3, (y * gridSize) + 3, 4, 4);
+            ctx.fillRect((x * gridSize) + 11, (y * gridSize) + 3, 4, 4);
+            
+            // Draw pupils
+            ctx.fillStyle = 'black';
+            ctx.fillRect((x * gridSize) + 4, (y * gridSize) + 4, 2, 2);
+            ctx.fillRect((x * gridSize) + 12, (y * gridSize) + 4, 2, 2);
+        }
+
+        function drawApple() {
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc((apple.x * gridSize) + gridSize/2, (apple.y * gridSize) + gridSize/2, gridSize/2 - 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw leaf
+            ctx.fillStyle = 'green';
+            ctx.beginPath();
+            ctx.moveTo((apple.x * gridSize) + gridSize/2, (apple.y * gridSize) + 2);
+            ctx.quadraticCurveTo((apple.x * gridSize) + gridSize/2 + 5, (apple.y * gridSize) - 5, (apple.x * gridSize) + gridSize/2 + 10, (apple.y * gridSize) + 2);
+            ctx.quadraticCurveTo((apple.x * gridSize) + gridSize/2 + 5, (apple.y * gridSize), (apple.x * gridSize) + gridSize/2, (apple.y * gridSize) + 2);
+            ctx.fill();
+        }
+
+        function drawBorder() {
+            ctx.strokeStyle = '#4CAF50';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawScore() {
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText('Score: ' + score, 10, 30);
+        }
+
+        function moveSnake() {
+            const head = {x: snake[0].x + dx, y: snake[0].y + dy};
+            snake.unshift(head);
+            if (head.x === apple.x && head.y === apple.y) {
+                score++;
+                generateApple();
+            } else {
+                snake.pop();
+            }
+        }
+
+        function generateApple() {
+            apple.x = Math.floor(Math.random() * tileCount);
+            apple.y = Math.floor(Math.random() * tileCount);
+        }
+
+        function checkCollision() {
+            const head = snake[0];
+            if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                gameOver();
+            }
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    gameOver();
+                }
+            }
+        }
+
+        function checkAppleCollision() {
+            const head = snake[0];
+            if (head.x === apple.x && head.y === apple.y) {
+                score++;
+                generateApple();
+            }
+        }
+
+        function gameOver() {
+            alert(`Game Over! Your score: ${score}`);
+            snake = [{x: 10, y: 10}];
+            dx = 0;
+            dy = 0;
+            score = 0;
+            generateApple();
+        }
+
+        function changeDirection(event) {
+            const LEFT_KEY = 37;
+            const RIGHT_KEY = 39;
+            const UP_KEY = 38;
+            const DOWN_KEY = 40;
+
+            const keyPressed = event.keyCode;
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingRight = dx === 1;
+            const goingLeft = dx === -1;
+
+            if (keyPressed === LEFT_KEY && !goingRight) {
+                dx = -1;
+                dy = 0;
+            }
+            if (keyPressed === UP_KEY && !goingDown) {
+                dx = 0;
+                dy = -1;
+            }
+            if (keyPressed === RIGHT_KEY && !goingLeft) {
+                dx = 1;
+                dy = 0;
+            }
+            if (keyPressed === DOWN_KEY && !goingUp) {
+                dx = 0;
+                dy = 1;
+            }
+        }
+
+        function gameLoop() {
+            drawGame();
+        }
+
+        function startSnakeGame() {
+            mainSketch.hide();
+            document.getElementById('snake-game').style.display = 'block';
+            document.getElementById('back-button').style.display = 'block';
+            document.getElementById('name').style.display = 'none';
+            document.getElementById('github-link').style.display = 'none';
+            document.getElementById('games-dropdown').style.display = 'none';
+            document.getElementById('snake-color-picker').style.display = 'none';
+            
+            generateApple();
+            gameLoopInterval = setInterval(gameLoop, 100);
+            document.addEventListener('keydown', changeDirection);
+        }
+
+        function backToMain() {
+            clearInterval(gameLoopInterval);
+            document.removeEventListener('keydown', changeDirection);
+            mainSketch.show();
+            document.getElementById('snake-game').style.display = 'none';
+            document.getElementById('back-button').style.display = 'none';
+            document.getElementById('name').style.display = 'block';
+            document.getElementById('github-link').style.display = 'block';
+            document.getElementById('games-dropdown').style.display = 'block';
+            document.getElementById('snake-color-picker').style.display = 'block';
+        }
+
+        // Start the main sketch
+        new p5();
+    </script>
 </body>
 </html>
