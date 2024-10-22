@@ -1,77 +1,137 @@
-/* General body styles */
 body {
-    font-family: Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    margin: 0;
-    padding: 20px;
-    background-color: #f0f0f0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+  font-family: 'Orbitron', sans-serif;
+  position: relative;
 }
 
-/* General button styles */
-.full-width-button {
-    width: 100%;
-    height: 60px;
-    background-color: lightblue;
-    color: white;
-    font-size: 24px;
-    text-align: center;
-    line-height: 60px;
-    cursor: pointer;
-    border: none;
-    margin: 10px 0;
-    padding: 0;
-    font-family: Arial, sans-serif;
-    font-weight: bold;
+.canvas-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
 }
 
-.meme-button {
-    background-color: #0088cc;
+canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
 }
 
-.add-message-button {
-    background-color: #0044cc;
+.content {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+  pointer-events: none;
 }
 
-/* Hover effects for buttons */
-.full-width-button:hover {
-    background-color: #87ceeb;
+/* Make all interactive elements within content clickable */
+.content * {
+  pointer-events: auto;
 }
 
-.meme-button:hover {
-    background-color: #0099dd;
+.name {
+  color: white;
+  font-size: 4rem;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
 }
 
-.add-message-button:hover {
-    background-color: #0055dd;
+.name:hover {
+  font-size: 4.5rem;
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.6);
 }
 
-/* Centering the message container */
-#messageForm {
-    text-align: center;
-    margin: 20px;
+/* GitHub Button */
+.github-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 10px 30px;
+  background-color: transparent;
+  color: #fff;
+  text-decoration: none;
+  border: 2px solid #ffffff;
+  border-radius: 30px;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  font-size: 1.2rem;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(255, 255, 255, 0.3);
+  z-index: 3;
 }
 
-/* Message input field */
-#messageInput {
-    width: 300px;
-    padding: 10px;
-    font-size: 16px;
-    margin-bottom: 10px;
+.github-btn:hover {
+  background-color: #ffffff;
+  color: black;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 1), 0 0 30px rgba(255, 255, 255, 0.8);
 }
 
-/* Message list styling */
-#messageList {
-    list-style-type: none;
-    padding: 0;
+/* Dropdown Menu */
+.dropdown-btn {
+  padding: 10px 30px;
+  background-color: transparent;
+  color: #fff;
+  border: 2px solid #ffffff;
+  border-radius: 30px;
+  font-weight: bold;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5), 0 0 20px rgba(255, 255, 255, 0.3);
+  z-index: 3;
 }
 
-#messageList li {
-    background-color: #ffffff;
-    border: 1px solid #ccc;
-    padding: 10px;
-    margin-bottom: 5px;
-    text-align: left;
+.dropdown-btn:hover {
+  background-color: #ffffff;
+  color: black;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 1), 0 0 30px rgba(255, 255, 255, 0.8);
+}
+
+/* Dropdown Content */
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background: black;
+  min-width: 160px;
+  box-shadow: 0 8px 16px rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  z-index: 4;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.dropdown-content a {
+  color: #ffffff;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid #ffffff;
+}
+
+.dropdown-content a:hover {
+  background: #ffffff;
+  color: black;
 }
