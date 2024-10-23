@@ -273,8 +273,7 @@ window.addEventListener('resize', function() {
                 var ax = (p.x % resolution) / resolution;
                 var ay = (p.y % resolution) / resolution;
                 
-                // Slower velocity changes for smoother transitions
-                p.xv += (1 - ax) * cell_data.xv * 0.03;  // Reduced from 0.05
+                p.xv += (1 - ax) * cell_data.xv * 0.03;
                 p.yv += (1 - ay) * cell_data.yv * 0.03;
                 
                 p.xv += ax * cell_data.right.xv * 0.03;
@@ -283,7 +282,6 @@ window.addEventListener('resize', function() {
                 p.xv += ay * cell_data.down.xv * 0.03;
                 p.yv += ay * cell_data.down.yv * 0.03;
                 
-                // Update position
                 p.x += p.xv;
                 p.y += p.yv;
                 
@@ -291,30 +289,26 @@ window.addEventListener('resize', function() {
                 var dy = p.py - p.y;
                 var dist = Math.sqrt(dx * dx + dy * dy);
                 
-                // Calculate velocity-based color every frame
                 var speed = Math.sqrt(p.xv * p.xv + p.yv * p.yv);
                 
-                // Smoother speed tracking with momentum
                 if (!p.currentSpeed) p.currentSpeed = speed;
-                p.currentSpeed = p.currentSpeed * 0.95 + speed * 0.05; // Smooth speed transitions
+                p.currentSpeed = p.currentSpeed * 0.95 + speed * 0.05;
                 
-                // Map speed to color spectrum
+                // Modified color calculation for rainbow spectrum based on speed
                 var maxSpeed = 1.5;
                 var speedRatio = Math.min(p.currentSpeed / maxSpeed, 1);
                 
-                // Create rainbow color spectrum
-                var hue;
-                if (p.currentSpeed < 0.1) { // Very slow or at rest
-                    p.color = 'rgb(0, 0, 0)'; // Black
+                if (p.currentSpeed < 0.05) {
+                    p.color = 'rgb(0, 0, 0)'; // Black for particles at rest
                 } else {
-                    // Map speed to hue (red=0, blue=240)
-                    // Reverse the hue mapping so red is fast and blue is slow
-                    hue = 240 - (speedRatio * 240);
-                    // Add saturation and brightness for more vibrant colors
-                    var saturation = 1000;
-                    var brightness = Math.min(40 + speedRatio * 60, 100); // Brighter at higher speeds
+                    // Map speed to hue (red=0, violet=270)
+                    // Reverse the hue mapping so red is fast and violet is slow
+                    var hue = 270 - (speedRatio * 270);
                     
-                    // Convert HSV to RGB
+                    // Keep saturation and brightness consistent for pure rainbow colors
+                    var saturation = 100;
+                    var brightness = 100;
+                    
                     function hsvToRgb(h, s, v) {
                         s = s / 100;
                         v = v / 100;
@@ -343,7 +337,6 @@ window.addEventListener('resize', function() {
                 
                 var limit = Math.random() * 0.5;
                 
-                // Draw the particle
                 if (dist > limit) {
                     ctx.lineWidth = 1;
                     ctx.strokeStyle = p.color;
@@ -363,7 +356,6 @@ window.addEventListener('resize', function() {
                 p.py = p.y;
             }
             else {
-                // Reset particle
                 p.x = p.px = Math.random() * canvas_width;
                 p.y = p.py = Math.random() * canvas_height;
                 p.xv = 0;
@@ -372,9 +364,8 @@ window.addEventListener('resize', function() {
                 p.color = 'rgb(0, 0, 0)';
             }
             
-            // Slightly slower velocity dampening for more persistent movements
-            p.xv *= 0.6; // Increased from 0.5
-            p.yv *= 0.6;
+            p.xv *= 0.5;
+            p.yv *= 0.5;
         }
     }
     
