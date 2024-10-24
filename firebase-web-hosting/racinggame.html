@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>2D Racing Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            background: #2c3e50;
+            font-family: Arial, sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            margin: 20px;
+        }
+        #gameCanvas {
+            border: 2px solid white;
+            background: #95a5a6;
+        }
+        #timer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 24px;
+            z-index: 10;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 10;
+        }
+        #leaderboard {
+            margin: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 5px;
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="timer">Time: 0.00s</div>
+        <div id="controls">
+            Controls:<br>
+            ↑Accelerate<br>
+            ↓Brake/Reverse<br>
+            ←Turn Left<br>
+            →Turn Right
+        </div>
+    </div>
+    <div id="leaderboard">
+        <h2>Leaderboard</h2>
+        <div id="leaderboardEntries"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // Game constants
+            const CAR_WIDTH = 30;
+            const CAR_HEIGHT = 50;
+            const MAX_SPEED = 5;
+            const ACCELERATION = 0.2;
+            const BRAKE_POWER = 0.3;
+            const TURN_SPEED = 0.05;
+            const FRICTION = 0.98;
+            const TRACK_WIDTH = 100; // Increased track width
+            const FLAG_SIZE = 40;
+
+            // Game state
+            let gameState = {
+                car: {
+                    x: 0,
+                    y: 0,
+                    angle: 0,
+                    speed: 0,
+                    lap: 0
+                },
+                track: [],
+                startLine: { x: 0, y: 0, angle: 0 },
+                isRacing: false,
+                time: 0,
+                startTime: Date.now(),
+                lastCheckpoint: 0
+            };
+
+            const keys = {};
+
+            function generateRandomTrack() {
+                const points = [];
+                const numPoints = 6 + Math.floor(Math.random() * 3); // 6-8 points for smoother track
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+                const minRadius = Math.min(canvas.width, canvas.height) / 3.5;
+                const maxRadius = Math.min(canvas.width, canvas.height) / 2.8;
+
+                // Generate random control points with more consistent spacing
+                for (let i = 0; i < numPoints; i++) {
+                    const angle = (i / numPoints) * Math.PI * 2;
+                    const radius = minRadius + (Math.sin(angle * 2) + 1) * (maxRadius - minRadius) / 2;
+                    points.push({
+                        x: centerX + Math.cos(angle) * radius,
+                        y: centerY + Math.sin(angle) * radius
+                    });
+                }
+
+                // Convert points to smooth track segments using more control points
+                gameState.track = [];
+                const segments = 200; // Increased segments for smoother curves
+                
+                for (let i = 0; i < points.length; i++) {
+                    const current = points[i];
+                    const next = points[(i + 1) % points.length];
+                    const prev = points[(i - 1 + points.length) % points.length];
+                    
+                    // Calculate control points for smoother curves
+                    const cp1x = current.x + (next.x - prev.x) * 0.25;
+                    const cp1y = current.y + (next.y - prev.y) * 0.25;
+                    const cp2x = next.x - (next.x - current.x) * 0.25;
+                    const cp2y = next.y - (next.y - current.y) * 0.25;
+                    
+                    for (let j = 0; j < segments / points.length; j++) {
+                        const t = j / (segments / points.length);
+                        const point = bezierPoint(current, {x: cp1x, y: cp1y}, {x: cp2x, y: cp2y}, next, t);
+                        gameState.track.push(point);
+                    }
+                }
+
+                // Set start line near the first point
+                gameState.startLine = {
+                    x: gameState.track[0].x,
+                    y: gameState.track[0].y,
+                    angle: Math.atan2(
+                        gameState.track[1].y - gameState.track[0].y,
+                        gameState.track[1].x - gameState.track[0].x
+                    )
+                };
+
+                // Set car starting position
+                gameState.car.x = gameState.startLine.x;
+                gameState.car.y = gameState.startLine.y;
+                gameState.car.angle = gameState.startLine.angle;
+            }
+
+            function bezierPoint(p0, p1, p2, p3, t) {
+                const cX = 3 * (p1.x - p0.x);
+                const bX = 3 * (p2.x - p1.x) - cX;
+                const aX = p3.x - p0.x - cX - bX;
+                
+                const cY = 3 * (p1.y - p0.y);
+                const bY = 3 * (p2.y - p1.y) - cY;
+                const aY = p3.y - p0.y - cY - bY;
+                
+                const x = (aX * Math.pow(t, 3)) + (bX * Math.pow(t, 2)) + (cX * t) + p0.x;
+                const y = (aY * Math.pow(t, 3)) + (bY * Math.pow(t, 2)) + (cY * t) + p0.y;
+                
+                return {x, y};
+            }
+
+            function drawCheckeredFlag() {
+                const flagSize = FLAG_SIZE;
+                const squareSize = flagSize / 4;
+                
+                ctx.save();
+                ctx.translate(gameState.startLine.x, gameState.startLine.y);
+                ctx.rotate(gameState.startLine.angle);
+                
+                // Draw checkered pattern
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        ctx.fillStyle = (i + j) % 2 === 0 ? 'white' : 'black';
+                        ctx.fillRect(
+                            -flagSize/2 + i * squareSize,
+                            -flagSize/2 + j * squareSize,
+                            squareSize,
+                            squareSize
+                        );
+                    }
+                }
+                
+                ctx.restore();
+            }
+
+            function drawCar() {
+                ctx.save();
+                ctx.translate(gameState.car.x, gameState.car.y);
+                ctx.rotate(gameState.car.angle + Math.PI/2);
+                
+                const pixelSize = 4; // Size of each "pixel" block
+                
+                // Wheels (black)
+                ctx.fillStyle = '#000000';
+                // Front wheels
+                ctx.fillRect(-20, -30, 12, 16);
+                ctx.fillRect(-20, 14, 12, 16);
+                // Back wheels
+                ctx.fillRect(8, -30, 12, 16);
+                ctx.fillRect(8, 14, 12, 16);
+                
+                // Car body main (red)
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(-15, -20, 30, 40);
+                
+                // Front and back accents (light gray)
+                ctx.fillStyle = '#DDDDDD';
+                // Front accent
+                ctx.fillRect(-12, -16, 8, 32);
+                // Back accent
+                ctx.fillRect(4, -16, 8, 32);
+                
+                // Additional black details
+                ctx.fillStyle = '#000000';
+                // Central stripe
+                ctx.fillRect(-4, -20, 8, 40);
+                // Front detail
+                ctx.fillRect(-15, -8, 4, 16);
+                // Back detail
+                ctx.fillRect(11, -8, 4, 16);
+                
+                ctx.restore();
+            }
+
+            function drawTrack() {
+                ctx.beginPath();
+                ctx.moveTo(gameState.track[0].x, gameState.track[0].y);
+                
+                for (let i = 1; i < gameState.track.length; i++) {
+                    ctx.lineTo(gameState.track[i].x, gameState.track[i].y);
+                }
+                
+                ctx.closePath();
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = TRACK_WIDTH;
+                ctx.stroke();
+                
+                // Track borders
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            function checkLap() {
+                const dx = gameState.car.x - gameState.startLine.x;
+                const dy = gameState.car.y - gameState.startLine.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < TRACK_WIDTH/2) {
+                    // Check if we've gone around the track
+                    const currentCheckpoint = getNearestTrackPoint(gameState.car.x, gameState.car.y);
+                    if (Math.abs(currentCheckpoint - gameState.lastCheckpoint) > gameState.track.length/2) {
+                        gameState.lap++;
+                        if (gameState.lap >= 3) {
+                            alert(`Race complete! Time: ${gameState.time.toFixed(2)}s`);
+                            initGame();
+                        }
+                    }
+                    gameState.lastCheckpoint = currentCheckpoint;
+                }
+            }
+
+            function update() {
+                // Fixed controls for proper car movement
+                if (keys.ArrowUp) {
+                    // Accelerate forward
+                    gameState.car.speed += ACCELERATION;
+                }
+                if (keys.ArrowDown) {
+                    // Brake/reverse
+                    if (gameState.car.speed > 0) {
+                        gameState.car.speed -= BRAKE_POWER; // Stronger brake effect
+                    } else {
+                        gameState.car.speed -= ACCELERATION / 4; // Slower reverse
+                    }
+                }
+                
+                // Only allow turning when the car is moving
+                if (Math.abs(gameState.car.speed) > 0.1) {
+                    if (keys.ArrowLeft) {
+                        gameState.car.angle -= TURN_SPEED * (gameState.car.speed > 0 ? 1 : -1);
+                    }
+                    if (keys.ArrowRight) {
+                        gameState.car.angle += TURN_SPEED * (gameState.car.speed > 0 ? 1 : -1);
+                    }
+                }
+
+                gameState.car.speed *= FRICTION;
+                gameState.car.speed = Math.max(-MAX_SPEED/2, Math.min(MAX_SPEED, gameState.car.speed));
+
+                const newX = gameState.car.x + Math.cos(gameState.car.angle) * gameState.car.speed;
+                const newY = gameState.car.y + Math.sin(gameState.car.angle) * gameState.car.speed;
+                
+                const nearestPoint = getNearestTrackPoint(newX, newY);
+                if (isPointInTrack(newX, newY, nearestPoint)) {
+                    gameState.car.x = newX;
+                    gameState.car.y = newY;
+                    checkLap();
+                } else {
+                    gameState.car.speed *= 0.5; // Softer collision response
+                }
+
+                if (gameState.isRacing) {
+                    gameState.time = (Date.now() - gameState.startTime) / 1000;
+                    document.getElementById('timer').textContent = `Time: ${gameState.time.toFixed(2)}s`;
+                }
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawTrack();
+                drawCheckeredFlag();
+                drawCar();
+                
+                ctx.fillStyle = 'white';
+                ctx.font = '24px Arial';
+                ctx.fillText(`Lap: ${gameState.lap + 1}/3`, 20, 40);
+            }
+
+            function getNearestTrackPoint(x, y) {
+                let nearest = 0;
+                let minDist = Infinity;
+                
+                for (let i = 0; i < gameState.track.length; i++) {
+                    const dx = x - gameState.track[i].x;
+                    const dy = y - gameState.track[i].y;
+                    const dist = dx * dx + dy * dy;
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = i;
+                    }
+                }
+                return nearest;
+            }
+
+            function isPointInTrack(x, y, nearestPoint) {
+                const point = gameState.track[nearestPoint];
+                const dx = x - point.x;
+                const dy = y - point.y;
+                return Math.sqrt(dx * dx + dy * dy) < TRACK_WIDTH/2;
+            }
+
+            function gameLoop() {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+
+            window.addEventListener('keydown', (e) => {
+                keys[e.key] = true;
+                if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keys[e.key] = false;
+            });
+        
+        function initGame() {
+                generateRandomTrack();
+                gameState.isRacing = true;
+                gameState.startTime = Date.now();
+                gameState.lap = 0;
+                gameState.lastCheckpoint = 0;
+                gameState.time = 0;
+                gameState.car.speed = 0;
+            }
+
+            initGame();
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
