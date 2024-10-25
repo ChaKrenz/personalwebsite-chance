@@ -52,11 +52,12 @@
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="timer">Time: 0.00s</div>
         <div id="controls">
-            Controls:<br>
-            ↑Accelerate<br>
-            ↓Brake/Reverse<br>
-            ←Turn Left<br>
-            →Turn Right
+            <ul style="list-style-type: none; padding-left: 0;">
+                <li><span style="display:inline-block; width: 20px;">↑</span>Accelerate</li>
+                <li><span style="display:inline-block; width: 20px;">↓</span>Brake/Reverse</li>
+                <li><span style="display:inline-block; width: 20px;">←</span>Turn Left</li>
+                <li><span style="display:inline-block; width: 20px;">→</span>Turn Right</li>
+            </ul>
         </div>
     </div>
     <div id="leaderboard">
@@ -78,7 +79,7 @@
             const TURN_SPEED = 0.05;
             const FRICTION = 0.98;
             const TRACK_WIDTH = 100; // Increased track width
-            const FLAG_SIZE = 40;
+            const FLAG_SIZE = TRACK_WIDTH;
 
             // Game state
             let gameState = {
@@ -101,37 +102,52 @@
 
             function generateRandomTrack() {
                 const points = [];
-                const numPoints = 6 + Math.floor(Math.random() * 3); // 6-8 points for smoother track
+                const numPoints = 8 + Math.floor(Math.random() * 4); // Randomize the number of points (8-11)
                 const centerX = canvas.width / 2;
                 const centerY = canvas.height / 2;
-                const minRadius = Math.min(canvas.width, canvas.height) / 3.5;
-                const maxRadius = Math.min(canvas.width, canvas.height) / 2.8;
+                const minRadius = Math.min(canvas.width, canvas.height) / 4; // Reduced min radius for more irregular shapes
+                const maxRadius = Math.min(canvas.width, canvas.height) / 2;
 
-                // Generate random control points with more consistent spacing
+                const straightLength = 150; // Length of the straight section in pixels
+
+                // Generate random control points with randomized angles and radii
                 for (let i = 0; i < numPoints; i++) {
-                    const angle = (i / numPoints) * Math.PI * 2;
-                    const radius = minRadius + (Math.sin(angle * 2) + 1) * (maxRadius - minRadius) / 2;
+                    const angle = (i / numPoints) * Math.PI * 2 + (Math.random() * 0.3 - 0.15); // Randomize angles slightly
+                    const radius = minRadius + Math.random() * (maxRadius - minRadius); // Randomize radius between min and max
                     points.push({
                         x: centerX + Math.cos(angle) * radius,
                         y: centerY + Math.sin(angle) * radius
                     });
                 }
 
-                // Convert points to smooth track segments using more control points
-                gameState.track = [];
-                const segments = 200; // Increased segments for smoother curves
+                // Force the first two points to form a straight line
+                const startPoint = points[0];
+                const nextPoint = points[1];
+
+                // Calculate angle of the first segment
+                const angle = Math.atan2(nextPoint.y - startPoint.y, nextPoint.x - startPoint.x);
                 
+                // Adjust the second point to ensure a straight line of the desired length
+                points[1] = {
+                    x: startPoint.x + Math.cos(angle) * straightLength,
+                    y: startPoint.y + Math.sin(angle) * straightLength
+                };
+
+                // Convert points to smooth track segments using bezier curves
+                gameState.track = [];
+                const segments = 200;
+
                 for (let i = 0; i < points.length; i++) {
                     const current = points[i];
                     const next = points[(i + 1) % points.length];
                     const prev = points[(i - 1 + points.length) % points.length];
-                    
+
                     // Calculate control points for smoother curves
                     const cp1x = current.x + (next.x - prev.x) * 0.25;
                     const cp1y = current.y + (next.y - prev.y) * 0.25;
                     const cp2x = next.x - (next.x - current.x) * 0.25;
                     const cp2y = next.y - (next.y - current.y) * 0.25;
-                    
+
                     for (let j = 0; j < segments / points.length; j++) {
                         const t = j / (segments / points.length);
                         const point = bezierPoint(current, {x: cp1x, y: cp1y}, {x: cp2x, y: cp2y}, next, t);
@@ -152,8 +168,9 @@
                 // Set car starting position
                 gameState.car.x = gameState.startLine.x;
                 gameState.car.y = gameState.startLine.y;
-                gameState.car.angle = gameState.startLine.angle;
+                gameState.car.angle = -gameState.startLine.angle;
             }
+
 
             function bezierPoint(p0, p1, p2, p3, t) {
                 const cX = 3 * (p1.x - p0.x);
@@ -171,28 +188,37 @@
             }
 
             function drawCheckeredFlag() {
-                const flagSize = FLAG_SIZE;
-                const squareSize = flagSize / 4;
-                
+                const flagWidth = FLAG_SIZE; // Flag width is the original flag size
+                const flagLength = flagWidth / 4; // Length is one-fourth of the width
+                const rows = 4; // More rows for smaller squares
+                const cols = 8; // More columns for smaller squares
+                const squareWidth = flagWidth / cols;
+                const squareLength = flagLength / rows;
+
                 ctx.save();
                 ctx.translate(gameState.startLine.x, gameState.startLine.y);
-                ctx.rotate(gameState.startLine.angle);
                 
-                // Draw checkered pattern
-                for (let i = 0; i < 4; i++) {
-                    for (let j = 0; j < 4; j++) {
+                // Rotate the flag by 90 degrees (π/2 radians) to go across the track
+                ctx.rotate(gameState.startLine.angle + Math.PI / 2);
+
+                // Draw checkered pattern with smaller squares
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
                         ctx.fillStyle = (i + j) % 2 === 0 ? 'white' : 'black';
                         ctx.fillRect(
-                            -flagSize/2 + i * squareSize,
-                            -flagSize/2 + j * squareSize,
-                            squareSize,
-                            squareSize
+                            -flagWidth / 2 + i * squareWidth,
+                            -flagLength / 2 + j * squareLength,
+                            squareWidth,
+                            squareLength
                         );
                     }
                 }
-                
+
                 ctx.restore();
             }
+
+
+
 
             function drawCar() {
                 ctx.save();
@@ -204,15 +230,22 @@
                 // Wheels (black)
                 ctx.fillStyle = '#000000';
                 // Front wheels
-                ctx.fillRect(-20, -30, 12, 16);
-                ctx.fillRect(-20, 14, 12, 16);
+                ctx.fillRect(-20, -22, 12, 16);
+                ctx.fillRect(-20, 6, 12, 16);
                 // Back wheels
-                ctx.fillRect(8, -30, 12, 16);
-                ctx.fillRect(8, 14, 12, 16);
+                ctx.fillRect(8, -22, 12, 16);
+                ctx.fillRect(8, 6, 12, 16);
+
+                //(x: number, y: number, w: number, h: number)
+
+                //wing
+                ctx.fillStyle = '#FF0000';
+                ctx.fillRect(-16, 20, 32, 6)
+                ctx.fillRect(-20, -29, 40, 3)
                 
                 // Car body main (red)
                 ctx.fillStyle = '#FF0000';
-                ctx.fillRect(-15, -20, 30, 40);
+                ctx.fillRect(-12, -30, 24, 50);
                 
                 // Front and back accents (light gray)
                 ctx.fillStyle = '#DDDDDD';
@@ -224,7 +257,7 @@
                 // Additional black details
                 ctx.fillStyle = '#000000';
                 // Central stripe
-                ctx.fillRect(-4, -20, 8, 40);
+                ctx.fillRect(-4, -26, 8, 44);
                 // Front detail
                 ctx.fillRect(-15, -8, 4, 16);
                 // Back detail
