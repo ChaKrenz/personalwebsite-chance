@@ -60,6 +60,31 @@
         .gold { color: #FFD700; }
         .silver { color: #C0C0C0; }
         .bronze { color: #CD7F32; }
+        #gameOverMessage {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 100;
+        }
+        #restartButton {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #4CAF50;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #restartButton:hover {
+            background: #45a049;
+        }
     </style>
 </head>
 <body>
@@ -73,6 +98,11 @@
                 <li><span style="display:inline-block; width: 20px;">←</span>Turn Left</li>
                 <li><span style="display:inline-block; width: 20px;">→</span>Turn Right</li>
             </ul>
+        </div>
+        <div id="gameOverMessage">
+            <h2>Race Complete!</h2>
+            <p id="finalTimeDisplay"></p>
+            <button id="restartButton">Race Again</button>
         </div>
     </div>
     <div id="leaderboard">
@@ -206,6 +236,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
+            const gameOverMessage = document.getElementById('gameOverMessage');
+            const finalTimeDisplay = document.getElementById('finalTimeDisplay');
+            const restartButton = document.getElementById('restartButton');
 
             // Game constants
             const CAR_WIDTH = 30;
@@ -232,7 +265,9 @@
                 isRacing: false,
                 time: 0,
                 startTime: Date.now(),
-                lastCheckpoint: 0
+                lastCheckpoint: 0,
+                raceCompleted: false,  // New flag to prevent multiple submissions
+                scoreSubmitted: false  // New flag to prevent multiple submissions
             };
 
             const keys = {};
@@ -428,11 +463,19 @@
                     const currentCheckpoint = getNearestTrackPoint(gameState.car.x, gameState.car.y);
                     if (Math.abs(currentCheckpoint - gameState.lastCheckpoint) > gameState.track.length/2) {
                         gameState.lap++;
-                        if (gameState.lap >= 3) {
+                        if (gameState.lap >= 3 && !gameState.raceCompleted) {
+                            gameState.raceCompleted = true;
                             const finalTime = gameState.time;
-                            await submitScore(finalTime);
-                            alert(`Congratulations! You finished in ${finalTime.toFixed(2)}s`);
-                            initGame();
+                            
+                            // Show game over message
+                            finalTimeDisplay.textContent = `Your time: ${finalTime.toFixed(2)}s`;
+                            gameOverMessage.style.display = 'block';
+                            
+                            // Submit score only once
+                            if (!gameState.scoreSubmitted) {
+                                gameState.scoreSubmitted = true;
+                                await submitScore(finalTime);
+                            }
                         }
                     }
                     gameState.lastCheckpoint = currentCheckpoint;
@@ -544,6 +587,11 @@
             window.addEventListener('keyup', (e) => {
                 keys[e.key] = false;
             });
+
+            restartButton.addEventListener('click', () => {
+                gameOverMessage.style.display = 'none';
+                initGame();
+            });
         
             function initGame() {
                 generateRandomTrack();
@@ -553,6 +601,8 @@
                 gameState.lastCheckpoint = 0;
                 gameState.time = 0;
                 gameState.car.speed = 0;
+                gameState.raceCompleted = false;
+                gameState.scoreSubmitted = false;
             }
 
             initGame();
