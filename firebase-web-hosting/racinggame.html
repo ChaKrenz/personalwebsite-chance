@@ -85,12 +85,24 @@
         #restartButton:hover {
             background: #45a049;
         }
+        .checkpoint-counter {
+            position: absolute;
+            top: 60px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 24px;
+            color: white;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
         <div id="timer">Time: 0.00s</div>
+        <div id="checkpointCounter" class="checkpoint-counter">Checkpoints: 0/0</div>
         <div id="controls">
             <ul style="list-style-type: none; padding-left: 0;">
                 <li><span style="display:inline-block; width: 20px;">↑</span>Accelerate</li>
@@ -239,6 +251,7 @@
             const gameOverMessage = document.getElementById('gameOverMessage');
             const finalTimeDisplay = document.getElementById('finalTimeDisplay');
             const restartButton = document.getElementById('restartButton');
+            const checkpointCounter = document.getElementById('checkpointCounter');
 
             // Game constants
             const CAR_WIDTH = 30;
@@ -261,60 +274,55 @@
                     lap: 0
                 },
                 track: [],
+                checkpoints: [],
+                reachedCheckpoints: new Set(),
                 startLine: { x: 0, y: 0, angle: 0 },
                 isRacing: false,
                 time: 0,
                 startTime: Date.now(),
                 lastCheckpoint: 0,
-                raceCompleted: false,  // New flag to prevent multiple submissions
-                scoreSubmitted: false  // New flag to prevent multiple submissions
+                raceCompleted: false,
+                scoreSubmitted: false
             };
 
             const keys = {};
 
             function generateRandomTrack() {
                 const points = [];
-                const numPoints = 8 + Math.floor(Math.random() * 4); // Randomize the number of points (8-11)
+                const numPoints = 8 + Math.floor(Math.random() * 4);
                 const centerX = canvas.width / 2;
                 const centerY = canvas.height / 2;
-                const minRadius = Math.min(canvas.width, canvas.height) / 4; // Reduced min radius for more irregular shapes
+                const minRadius = Math.min(canvas.width, canvas.height) / 4;
                 const maxRadius = Math.min(canvas.width, canvas.height) / 2;
+                const straightLength = 150;
 
-                const straightLength = 150; // Length of the straight section in pixels
-
-                // Generate random control points with randomized angles and radii
+                // Generate track points counterclockwise
                 for (let i = 0; i < numPoints; i++) {
-                    const angle = (i / numPoints) * Math.PI * 2 + (Math.random() * 0.3 - 0.15); // Randomize angles slightly
-                    const radius = minRadius + Math.random() * (maxRadius - minRadius); // Randomize radius between min and max
+                    // Change the angle calculation direction
+                    const angle = (-i / numPoints) * Math.PI * 2 + (Math.random() * 0.3 - 0.15);
+                    const radius = minRadius + Math.random() * (maxRadius - minRadius);
                     points.push({
                         x: centerX + Math.cos(angle) * radius,
                         y: centerY + Math.sin(angle) * radius
                     });
                 }
 
-                // Force the first two points to form a straight line
+                // Adjust start straight for counterclockwise direction
                 const startPoint = points[0];
-                const nextPoint = points[1];
-
-                // Calculate angle of the first segment
-                const angle = Math.atan2(nextPoint.y - startPoint.y, nextPoint.x - startPoint.x);
-                
-                // Adjust the second point to ensure a straight line of the desired length
+                const angle = Math.atan2(points[1].y - startPoint.y, points[1].x - startPoint.x);
                 points[1] = {
                     x: startPoint.x + Math.cos(angle) * straightLength,
                     y: startPoint.y + Math.sin(angle) * straightLength
                 };
 
-                // Convert points to smooth track segments using bezier curves
+                // Generate track segments (direction is determined by points order)
                 gameState.track = [];
                 const segments = 200;
-
                 for (let i = 0; i < points.length; i++) {
                     const current = points[i];
                     const next = points[(i + 1) % points.length];
                     const prev = points[(i - 1 + points.length) % points.length];
 
-                    // Calculate control points for smoother curves
                     const cp1x = current.x + (next.x - prev.x) * 0.25;
                     const cp1y = current.y + (next.y - prev.y) * 0.25;
                     const cp2x = next.x - (next.x - current.x) * 0.25;
@@ -327,20 +335,54 @@
                     }
                 }
 
-                // Set start line near the first point
+                // Generate checkpoints from the points (counterclockwise order)
+                gameState.checkpoints = points.map((point, index) => ({
+                    x: point.x,
+                    y: point.y,
+                    radius: 30,
+                    id: index
+                }));
+
+                // Set start line with adjusted angle for counterclockwise direction
                 gameState.startLine = {
                     x: gameState.track[0].x,
                     y: gameState.track[0].y,
                     angle: Math.atan2(
                         gameState.track[1].y - gameState.track[0].y,
                         gameState.track[1].x - gameState.track[0].x
-                    )
+                    ) - Math.PI // Subtract PI to face counterclockwise
                 };
 
-                // Set car starting position
+                // Set car position with adjusted angle
                 gameState.car.x = gameState.startLine.x;
                 gameState.car.y = gameState.startLine.y;
                 gameState.car.angle = -gameState.startLine.angle;
+            }
+
+            function drawCheckpoints() {
+                gameState.checkpoints.forEach(checkpoint => {
+                    ctx.beginPath();
+                    ctx.arc(checkpoint.x, checkpoint.y, checkpoint.radius, 0, Math.PI * 2);
+                    
+                    if (gameState.reachedCheckpoints.has(checkpoint.id)) {
+                        ctx.strokeStyle = '#00FF00';
+                        ctx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+                    } else {
+                        ctx.strokeStyle = '#FF0000';
+                        ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+                    }
+                    
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.fill();
+
+                    // Draw checkpoint number
+                    ctx.fillStyle = 'white';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(checkpoint.id + 1, checkpoint.x, checkpoint.y);
+                });
             }
 
 
@@ -360,20 +402,20 @@
             }
 
             function drawCheckeredFlag() {
-                const flagWidth = FLAG_SIZE; // Flag width is the original flag size
-                const flagLength = flagWidth / 4; // Length is one-fourth of the width
-                const rows = 4; // More rows for smaller squares
-                const cols = 8; // More columns for smaller squares
+                const flagWidth = FLAG_SIZE;
+                const flagLength = flagWidth / 4;
+                const rows = 4;
+                const cols = 8;
                 const squareWidth = flagWidth / cols;
                 const squareLength = flagLength / rows;
 
                 ctx.save();
                 ctx.translate(gameState.startLine.x, gameState.startLine.y);
                 
-                // Rotate the flag by 90 degrees (π/2 radians) to go across the track
-                ctx.rotate(gameState.startLine.angle + Math.PI / 2);
+                // Rotate the flag in the opposite direction
+                ctx.rotate(gameState.startLine.angle - Math.PI / 2); // Subtract PI/2 instead of adding
 
-                // Draw checkered pattern with smaller squares
+                // Draw checkered pattern
                 for (let i = 0; i < cols; i++) {
                     for (let j = 0; j < rows; j++) {
                         ctx.fillStyle = (i + j) % 2 === 0 ? 'white' : 'black';
@@ -454,31 +496,42 @@
                 ctx.stroke();
             }
 
-            async function checkLap() {
+            function checkLap() {
+                // Check for checkpoint collisions
+                gameState.checkpoints.forEach(checkpoint => {
+                    const dx = gameState.car.x - checkpoint.x;
+                    const dy = gameState.car.y - checkpoint.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < checkpoint.radius + CAR_WIDTH/2) {
+                        gameState.reachedCheckpoints.add(checkpoint.id);
+                    }
+                });
+
+                // Check for lap completion
                 const dx = gameState.car.x - gameState.startLine.x;
                 const dy = gameState.car.y - gameState.startLine.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
                 if (distance < TRACK_WIDTH/2) {
-                    const currentCheckpoint = getNearestTrackPoint(gameState.car.x, gameState.car.y);
-                    if (Math.abs(currentCheckpoint - gameState.lastCheckpoint) > gameState.track.length/2) {
+                    // Only complete lap if all checkpoints are reached
+                    if (gameState.reachedCheckpoints.size === gameState.checkpoints.length) {
                         gameState.lap++;
+                        gameState.reachedCheckpoints.clear(); // Reset checkpoints for next lap
+                        
                         if (gameState.lap >= 3 && !gameState.raceCompleted) {
                             gameState.raceCompleted = true;
                             const finalTime = gameState.time;
                             
-                            // Show game over message
                             finalTimeDisplay.textContent = `Your time: ${finalTime.toFixed(2)}s`;
                             gameOverMessage.style.display = 'block';
                             
-                            // Submit score only once
                             if (!gameState.scoreSubmitted) {
                                 gameState.scoreSubmitted = true;
-                                await submitScore(finalTime);
+                                submitScore(finalTime);
                             }
                         }
                     }
-                    gameState.lastCheckpoint = currentCheckpoint;
                 }
             }
 
@@ -531,12 +584,17 @@
             function draw() {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 drawTrack();
+                drawCheckpoints(); // Add this line
                 drawCheckeredFlag();
                 drawCar();
                 
                 ctx.fillStyle = 'white';
                 ctx.font = '24px Arial';
                 ctx.fillText(`Lap: ${gameState.lap + 1}/3`, 20, 40);
+                
+                // Update checkpoint counter
+                checkpointCounter.textContent = 
+                    `Checkpoints: ${gameState.reachedCheckpoints.size}/${gameState.checkpoints.length}`;
             }
 
             function getNearestTrackPoint(x, y) {
@@ -603,6 +661,7 @@
                 gameState.car.speed = 0;
                 gameState.raceCompleted = false;
                 gameState.scoreSubmitted = false;
+                gameState.reachedCheckpoints.clear();
             }
 
             initGame();
