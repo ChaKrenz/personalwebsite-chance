@@ -154,7 +154,7 @@
         const leaderboardRef = collection(db, 'leaderboard');
     
         // Get username on first visit
-        let username = localStorage.getItem('racingUsername');
+        let username = "";
         if (!username) {
             username = prompt('Enter your username for the leaderboard:');
             if (username) {
