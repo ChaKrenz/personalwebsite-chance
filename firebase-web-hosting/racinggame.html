@@ -43,8 +43,23 @@
             padding: 20px;
             background: rgba(0, 0, 0, 0.7);
             border-radius: 5px;
-            min-width: 200px;
+            min-width: 250px;
         }
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 5px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        .place {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .gold { color: #FFD700; }
+        .silver { color: #C0C0C0; }
+        .bronze { color: #CD7F32; }
     </style>
 </head>
 <body>
@@ -61,11 +76,133 @@
         </div>
     </div>
     <div id="leaderboard">
-        <h2>Leaderboard</h2>
+        <h2>Top 10 Times</h2>
         <div id="leaderboardEntries"></div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-analytics.js";
+        import { 
+            getFirestore, 
+            collection, 
+            getDocs, 
+            addDoc,
+            query, 
+            orderBy, 
+            limit 
+        } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCKGX_pK2c0-XqFss9yxVmGUQOOk49IVC4",
+            authDomain: "personalwebsite-chance.firebaseapp.com",
+            databaseURL: "https://personalwebsite-chance-default-rtdb.firebaseio.com",
+            projectId: "personalwebsite-chance",
+            storageBucket: "personalwebsite-chance.appspot.com",
+            messagingSenderId: "968150134907",
+            appId: "1:968150134907:web:b728c3aa41c92e929432de",
+            measurementId: "G-QTYCRH51RW"
+        };
+    
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getFirestore(app);
+        const leaderboardRef = collection(db, 'leaderboard');
+    
+        // Get username on first visit
+        let username = localStorage.getItem('racingUsername');
+        if (!username) {
+            username = prompt('Enter your username for the leaderboard:');
+            if (username) {
+                localStorage.setItem('racingUsername', username);
+            } else {
+                username = 'Anonymous';
+                localStorage.setItem('racingUsername', username);
+            }
+        }
+    
+        // Function to update leaderboard display
+        async function updateLeaderboard() {
+            const leaderboardDiv = document.getElementById('leaderboardEntries');
+            leaderboardDiv.innerHTML = '';
+    
+            try {
+                // Get all scores ordered by time
+                const q = query(leaderboardRef, orderBy('time'), limit(50));  // Increased limit to handle filtering
+                const querySnapshot = await getDocs(q);
+    
+                if (querySnapshot.empty) {
+                    leaderboardDiv.textContent = "No leaderboard data available.";
+                    return;
+                }
+
+                // Process scores to keep only the best time per user
+                const bestScores = new Map();  // Use Map to track best score per user
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (!bestScores.has(data.username) || 
+                        bestScores.get(data.username).time > data.time) {
+                        bestScores.set(data.username, data);
+                    }
+                });
+
+                // Convert to array and sort by time
+                const sortedScores = Array.from(bestScores.values())
+                    .sort((a, b) => a.time - b.time)
+                    .slice(0, 10);  // Keep top 10
+
+                // Display scores
+                sortedScores.forEach((data, index) => {
+                    const position = index + 1;
+                    const entryDiv = document.createElement('div');
+                    entryDiv.className = 'leaderboard-entry';
+
+                    const placeSpan = document.createElement('span');
+                    placeSpan.className = `place ${position === 1 ? 'gold' : position === 2 ? 'silver' : position === 3 ? 'bronze' : ''}`;
+                    placeSpan.textContent = `${position}.`;
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = data.username;
+
+                    const timeSpan = document.createElement('span');
+                    timeSpan.textContent = `${data.time.toFixed(2)}s`;
+
+                    entryDiv.appendChild(placeSpan);
+                    entryDiv.appendChild(nameSpan);
+                    entryDiv.appendChild(timeSpan);
+                    leaderboardDiv.appendChild(entryDiv);
+                });
+                
+            } catch (error) {
+                console.error("Error fetching leaderboard:", error);
+                leaderboardDiv.textContent = "Error fetching leaderboard data.";
+            }
+        }
+    
+        // Initial leaderboard load
+        updateLeaderboard();
+    
+        async function submitScore(time) {
+            try {
+                // Simply add the new score
+                await addDoc(leaderboardRef, { 
+                    username, 
+                    time, 
+                    timestamp: Date.now() 
+                });
+                console.log("New score submitted successfully!");
+                
+                await updateLeaderboard();
+            } catch (error) {
+                console.error("Error submitting score:", error);
+                alert("Error submitting score. Your time was: " + time.toFixed(2) + "s");
+            }
+        }
+        window.submitScore = submitScore;
+
+        let gameState;
         document.addEventListener('DOMContentLoaded', function() {
             const canvas = document.getElementById('gameCanvas');
             const ctx = canvas.getContext('2d');
@@ -79,7 +216,7 @@
             const TURN_SPEED = 0.05;
             const FRICTION = 0.98;
             const TRACK_WIDTH = 100; // Increased track width
-            const FLAG_SIZE = TRACK_WIDTH;
+            const FLAG_SIZE = TRACK_WIDTH + 10;
 
             // Game state
             let gameState = {
@@ -217,9 +354,6 @@
                 ctx.restore();
             }
 
-
-
-
             function drawCar() {
                 ctx.save();
                 ctx.translate(gameState.car.x, gameState.car.y);
@@ -285,18 +419,19 @@
                 ctx.stroke();
             }
 
-            function checkLap() {
+            async function checkLap() {
                 const dx = gameState.car.x - gameState.startLine.x;
                 const dy = gameState.car.y - gameState.startLine.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                
+
                 if (distance < TRACK_WIDTH/2) {
-                    // Check if we've gone around the track
                     const currentCheckpoint = getNearestTrackPoint(gameState.car.x, gameState.car.y);
                     if (Math.abs(currentCheckpoint - gameState.lastCheckpoint) > gameState.track.length/2) {
                         gameState.lap++;
                         if (gameState.lap >= 3) {
-                            alert(`Race complete! Time: ${gameState.time.toFixed(2)}s`);
+                            const finalTime = gameState.time;
+                            await submitScore(finalTime);
+                            alert(`Congratulations! You finished in ${finalTime.toFixed(2)}s`);
                             initGame();
                         }
                     }
@@ -387,6 +522,15 @@
             function gameLoop() {
                 update();
                 draw();
+
+                if (gameState.isRacing) {
+                    gameState.time = (Date.now() - gameState.startTime) / 1000;
+                    document.getElementById('timer').textContent = `Time: ${gameState.time.toFixed(2)}s`;
+
+                    // Check for lap completion
+                    checkLap();
+                }
+
                 requestAnimationFrame(gameLoop);
             }
 
@@ -401,7 +545,7 @@
                 keys[e.key] = false;
             });
         
-        function initGame() {
+            function initGame() {
                 generateRandomTrack();
                 gameState.isRacing = true;
                 gameState.startTime = Date.now();
@@ -414,6 +558,7 @@
             initGame();
             gameLoop();
         });
+        window.gameState = gameState;
     </script>
 </body>
 </html>
