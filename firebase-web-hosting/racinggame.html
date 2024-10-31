@@ -11,14 +11,19 @@
             color: white;
             overflow: hidden;
         }
+
+        /* Game Container */
         #gameContainer {
             position: relative;
             margin: 20px;
         }
+
         #gameCanvas {
             border: 2px solid white;
             background: #95a5a6;
         }
+
+        /* Timer Display */
         #timer {
             position: absolute;
             top: 20px;
@@ -29,6 +34,8 @@
             font-size: 24px;
             z-index: 10;
         }
+
+        /* Controls Display */
         #controls {
             position: absolute;
             bottom: 20px;
@@ -38,13 +45,17 @@
             border-radius: 5px;
             z-index: 10;
         }
+
+        /* Leaderboard Styles */
         #leaderboard {
             margin: 20px;
             padding: 20px;
             background: rgba(0, 0, 0, 0.7);
             border-radius: 5px;
+            width: 250px;
             min-width: 250px;
         }
+
         .leaderboard-entry {
             display: flex;
             justify-content: space-between;
@@ -53,13 +64,37 @@
             background: rgba(255, 255, 255, 0.1);
             border-radius: 3px;
         }
+
         .place {
             font-weight: bold;
             margin-right: 10px;
         }
+
+        /* Medal Colors */
         .gold { color: #FFD700; }
         .silver { color: #C0C0C0; }
         .bronze { color: #CD7F32; }
+
+        /* Quota Message */
+        #quotaMessage {
+            padding: 20px;
+            text-align: center;
+            color: #FF6B6B;
+            background: rgba(255, 0, 0, 0.1);
+            border-radius: 5px;
+            margin: 10px 0;
+            width: calc(100% - 40px);
+            word-wrap: break-word;
+            white-space: normal;
+            line-height: 1.4;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            display: none;
+        }
+
+        /* Game Over Message */
         #gameOverMessage {
             display: none;
             position: absolute;
@@ -73,6 +108,7 @@
             text-align: center;
             z-index: 100;
         }
+
         #restartButton {
             margin-top: 10px;
             padding: 10px 20px;
@@ -81,20 +117,6 @@
             color: white;
             border-radius: 5px;
             cursor: pointer;
-        }
-        #restartButton:hover {
-            background: #45a049;
-        }
-        .checkpoint-counter {
-            position: absolute;
-            top: 60px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 24px;
-            color: white;
-            z-index: 10;
         }
     </style>
 </head>
@@ -119,6 +141,7 @@
     </div>
     <div id="leaderboard">
         <h2>Top 10 Times</h2>
+        <div id="quotaMessage">Database daily quota reached. Come back tomorrow to record times.</div>
         <div id="leaderboardEntries"></div>
     </div>
 
@@ -154,7 +177,7 @@
         const leaderboardRef = collection(db, 'leaderboard');
     
         // Get username on first visit
-        let username = "";
+        let username = localStorage.getItem('racingUsername');
         if (!username) {
             username = prompt('Enter your username for the leaderboard:');
             if (username) {
@@ -168,13 +191,15 @@
         // Function to update leaderboard display
         async function updateLeaderboard() {
             const leaderboardDiv = document.getElementById('leaderboardEntries');
+            const quotaMessage = document.getElementById('quotaMessage');
             leaderboardDiv.innerHTML = '';
-    
+            quotaMessage.style.display = 'none';
+
             try {
                 // Get all scores ordered by time
-                const q = query(leaderboardRef, orderBy('time'), limit(50));  // Increased limit to handle filtering
+                const q = query(leaderboardRef, orderBy('time'), limit(10));  // Increased limit to handle filtering
                 const querySnapshot = await getDocs(q);
-    
+
                 if (querySnapshot.empty) {
                     leaderboardDiv.textContent = "No leaderboard data available.";
                     return;
@@ -219,7 +244,17 @@
                 
             } catch (error) {
                 console.error("Error fetching leaderboard:", error);
-                leaderboardDiv.textContent = "Error fetching leaderboard data.";
+                
+                // Check for quota errors
+                if (error.code === 'resource-exhausted' || 
+                    error.message.includes('quota') || 
+                    error.message.includes('429') ||
+                    error.message.includes('limit exceeded')) {
+                    quotaMessage.style.display = 'block';
+                    leaderboardDiv.innerHTML = '';
+                } else {
+                    leaderboardDiv.textContent = "Error fetching leaderboard data.";
+                }
             }
         }
     
@@ -228,18 +263,27 @@
     
         async function submitScore(time) {
             try {
-                // Simply add the new score
                 await addDoc(leaderboardRef, { 
                     username, 
                     time, 
                     timestamp: Date.now() 
                 });
                 console.log("New score submitted successfully!");
-                
                 await updateLeaderboard();
             } catch (error) {
                 console.error("Error submitting score:", error);
-                alert("Error submitting score. Your time was: " + time.toFixed(2) + "s");
+                
+                // Check for quota errors
+                if (error.code === 'resource-exhausted' || 
+                    error.message.includes('quota') || 
+                    error.message.includes('429') ||
+                    error.message.includes('limit exceeded')) {
+                    document.getElementById('quotaMessage').style.display = 'block';
+                    document.getElementById('leaderboardEntries').innerHTML = '';
+                    alert("Database quota reached. Your time was: " + time.toFixed(2) + "s");
+                } else {
+                    alert("Error submitting score. Your time was: " + time.toFixed(2) + "s");
+                }
             }
         }
         window.submitScore = submitScore;
