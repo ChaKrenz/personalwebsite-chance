@@ -98,7 +98,7 @@ window.addEventListener('resize', function() {
     // You'll need to call your canvas resize function here
     // For example: resizeCanvas(canvas_width, canvas_height);
 });
-    var speck_count = 25000; //This determines how many particles will be made.
+    var speck_count = 5000; //This determines how many particles will be made.
     
     var vec_cells = []; //The array that will contain the grid cells
     var particles = []; //The array that will contain the particles
