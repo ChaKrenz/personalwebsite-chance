@@ -200,7 +200,7 @@
         const leaderboardRef = collection(db, 'leaderboard');
     
         // Get username on first visit
-        let username = localStorage.getItem('racingUsername');
+        let username = "localStorage.getItem('racingUsername')";
         if (!username) {
             username = prompt('Enter your username for the leaderboard:');
             if (username) {
@@ -212,74 +212,72 @@
         }
     
         // Function to update leaderboard display
-        async function updateLeaderboard() {
-            const leaderboardDiv = document.getElementById('leaderboardEntries');
-            const quotaMessage = document.getElementById('quotaMessage');
-            leaderboardDiv.innerHTML = '';
-            quotaMessage.style.display = 'none';
+        // Function to update leaderboard display
+            async function updateLeaderboard() {
+                const leaderboardDiv = document.getElementById('leaderboardEntries');
+                const quotaMessage = document.getElementById('quotaMessage');
+                leaderboardDiv.innerHTML = '';
+                quotaMessage.style.display = 'none';
 
-            try {
-                // Get all scores ordered by time
-                const q = query(leaderboardRef, orderBy('time'), limit(10));  // Increased limit to handle filtering
-                const querySnapshot = await getDocs(q);
+                try {
+                    // Get top 10 scores sorted by time
+                    const q = query(leaderboardRef, orderBy('time'), limit(30));  // Fetch more to have room after filtering
+                    const querySnapshot = await getDocs(q);
 
-                if (querySnapshot.empty) {
-                    leaderboardDiv.textContent = "No leaderboard data available.";
-                    return;
-                }
-
-                // Process scores to keep only the best time per user
-                const bestScores = new Map();  // Use Map to track best score per user
-                querySnapshot.forEach((doc) => {
-                    const data = doc.data();
-                    if (!bestScores.has(data.username) || 
-                        bestScores.get(data.username).time > data.time) {
-                        bestScores.set(data.username, data);
+                    if (querySnapshot.empty) {
+                        leaderboardDiv.textContent = "No leaderboard data available.";
+                        return;
                     }
-                });
 
-                // Convert to array and sort by time
-                const sortedScores = Array.from(bestScores.values())
-                    .sort((a, b) => a.time - b.time)
-                    .slice(0, 10);  // Keep top 10
+                    // Convert to array and sort by time
+                    const allScores = [];
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        allScores.push(data);
+                    });
 
-                // Display scores
-                sortedScores.forEach((data, index) => {
-                    const position = index + 1;
-                    const entryDiv = document.createElement('div');
-                    entryDiv.className = 'leaderboard-entry';
+                    // Sort all scores and take top 10
+                    const sortedScores = allScores
+                        .sort((a, b) => a.time - b.time)
+                        .slice(0, 10);
 
-                    const placeSpan = document.createElement('span');
-                    placeSpan.className = `place ${position === 1 ? 'gold' : position === 2 ? 'silver' : position === 3 ? 'bronze' : ''}`;
-                    placeSpan.textContent = `${position}.`;
+                    // Display scores
+                    sortedScores.forEach((data, index) => {
+                        const position = index + 1;
+                        const entryDiv = document.createElement('div');
+                        entryDiv.className = 'leaderboard-entry';
 
-                    const nameSpan = document.createElement('span');
-                    nameSpan.textContent = data.username;
+                        const placeSpan = document.createElement('span');
+                        placeSpan.className = `place ${position === 1 ? 'gold' : position === 2 ? 'silver' : position === 3 ? 'bronze' : ''}`;
+                        placeSpan.textContent = `${position}.`;
 
-                    const timeSpan = document.createElement('span');
-                    timeSpan.textContent = `${data.time.toFixed(2)}s`;
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = data.username;
 
-                    entryDiv.appendChild(placeSpan);
-                    entryDiv.appendChild(nameSpan);
-                    entryDiv.appendChild(timeSpan);
-                    leaderboardDiv.appendChild(entryDiv);
-                });
-                
-            } catch (error) {
-                console.error("Error fetching leaderboard:", error);
-                
-                // Check for quota errors
-                if (error.code === 'resource-exhausted' || 
-                    error.message.includes('quota') || 
-                    error.message.includes('429') ||
-                    error.message.includes('limit exceeded')) {
-                    quotaMessage.style.display = 'block';
-                    leaderboardDiv.innerHTML = '';
-                } else {
-                    leaderboardDiv.textContent = "Error fetching leaderboard data.";
+                        const timeSpan = document.createElement('span');
+                        timeSpan.textContent = `${data.time.toFixed(2)}s`;
+
+                        entryDiv.appendChild(placeSpan);
+                        entryDiv.appendChild(nameSpan);
+                        entryDiv.appendChild(timeSpan);
+                        leaderboardDiv.appendChild(entryDiv);
+                    });
+                    
+                } catch (error) {
+                    console.error("Error fetching leaderboard:", error);
+                    
+                    // Check for quota errors
+                    if (error.code === 'resource-exhausted' || 
+                        error.message.includes('quota') || 
+                        error.message.includes('429') ||
+                        error.message.includes('limit exceeded')) {
+                        quotaMessage.style.display = 'block';
+                        leaderboardDiv.innerHTML = '';
+                    } else {
+                        leaderboardDiv.textContent = "Error fetching leaderboard data.";
+                    }
                 }
             }
-        }
     
         // Initial leaderboard load
         updateLeaderboard();
