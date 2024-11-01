@@ -318,6 +318,12 @@
                 // Only load leaderboard if it hasn't been loaded before
                 updateLeaderboard();
                 });
+
+        //Choose false if too many requests to data base
+        const onLoad = false;
+        if (onLoad) {
+            updateLeaderboard();
+        }
     
         async function submitScore(time) {
             try {
