@@ -26,8 +26,8 @@
         /* Timer Display */
         #timer {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 10px;
+            right: 10px;
             background: rgba(0, 0, 0, 0.7);
             padding: 10px;
             border-radius: 5px;
@@ -38,10 +38,10 @@
         /* Controls Display */
         #controls {
             position: absolute;
-            bottom: 20px;
-            left: 20px;
+            bottom: 30px;
+            left: 10px;
             background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
+            padding: 5px;
             border-radius: 5px;
             z-index: 10;
         }
@@ -163,11 +163,33 @@
             color: #7f8c8d;
             display: none;
         }
+        .lap-counter {
+            position: absolute;
+            left: 10px;
+            top: 10px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 24px;
+            font-family: Arial;
+        }
+
+        @keyframes lapComplete {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.7); }
+            100% { transform: scale(1); }
+        }
+
+        .lap-animation {
+            animation: lapComplete 0.5s ease-out;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="lapCounter" class="lap-counter">Lap: 1/3</div>
         <div id="timer">Time: 0.00s</div>
         <div id="checkpointCounter" class="checkpoint-counter">Checkpoints: 0/0</div>
         <div id="controls">
@@ -625,8 +647,20 @@
                 if (distance < TRACK_WIDTH/2) {
                     // Only complete lap if all checkpoints are reached
                     if (gameState.reachedCheckpoints.size === gameState.checkpoints.length) {
+                        const previousLap = gameState.lap;
                         gameState.lap++;
                         gameState.reachedCheckpoints.clear(); // Reset checkpoints for next lap
+                        
+                        // Trigger lap animation
+                        const lapCounter = document.getElementById('lapCounter');
+                        lapCounter.textContent = `Lap: ${gameState.lap + 1}/3`;
+                        
+                        // Remove animation class and force reflow
+                        lapCounter.classList.remove('lap-animation');
+                        void lapCounter.offsetWidth; // Force reflow
+                        
+                        // Add animation class
+                        lapCounter.classList.add('lap-animation');
                         
                         if (gameState.lap >= 3 && !gameState.raceCompleted) {
                             gameState.raceCompleted = true;
@@ -708,13 +742,13 @@
                 drawCheckeredFlag();
                 drawCar();
                 
-                ctx.fillStyle = 'white';
-                ctx.font = '24px Arial';
-                ctx.fillText(`Lap: ${gameState.lap + 1}/3`, 50, 40);
+                // ctx.fillStyle = 'white';
+                // ctx.font = '24px Arial';
+                // ctx.fillText(`Lap: ${gameState.lap + 1}/3`, 50, 40);
                 
-                // Update checkpoint counter
-                checkpointCounter.textContent = 
-                    `Checkpoints: ${gameState.reachedCheckpoints.size}/${gameState.checkpoints.length}`;
+                // // Update checkpoint counter
+                // checkpointCounter.textContent = 
+                //     `Checkpoints: ${gameState.reachedCheckpoints.size}/${gameState.checkpoints.length}`;
             }
 
             function getNearestTrackPoint(x, y) {
@@ -830,7 +864,7 @@
                 });
             }
 
-            async function initGame() {
+            function initGame() {
                 generateRandomTrack();
                 gameState.isRacing = false;
                 gameState.isPaused = true;
@@ -842,9 +876,10 @@
                 gameState.scoreSubmitted = false;
                 gameState.reachedCheckpoints.clear();
                 document.getElementById('timer').textContent = 'Time: 0.00s';
+                document.getElementById('lapCounter').textContent = 'Lap: 1/3';
                 
                 // Wait for countdown to complete
-                await startCountdown();
+                return startCountdown();
             }
 
             initGame();
