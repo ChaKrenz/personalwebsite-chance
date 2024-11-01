@@ -644,34 +644,43 @@
                 }
             }
 
-            function update() {
+            function update(deltaTime) {
+                // Convert deltaTime to seconds
+                const deltaSeconds = deltaTime / 1000;
+
                 // Only process controls if the game is not paused
                 if (!gameState.isPaused) {
+                    // Scaled acceleration and braking based on delta time
+                    const scaledAcceleration = ACCELERATION * deltaSeconds * 60;
+                    const scaledBrakePower = BRAKE_POWER * deltaSeconds * 60;
+                    const scaledTurnSpeed = TURN_SPEED * deltaSeconds * 60;
+
                     if (keys.ArrowUp) {
-                        gameState.car.speed += ACCELERATION;
+                        gameState.car.speed += scaledAcceleration;
                     }
                     if (keys.ArrowDown) {
                         if (gameState.car.speed > 0) {
-                            gameState.car.speed -= BRAKE_POWER;
+                            gameState.car.speed -= scaledBrakePower;
                         } else {
-                            gameState.car.speed -= ACCELERATION / 4;
+                            gameState.car.speed -= scaledAcceleration / 4;
                         }
                     }
                     
                     if (Math.abs(gameState.car.speed) > 0.1) {
                         if (keys.ArrowLeft) {
-                            gameState.car.angle -= TURN_SPEED * (gameState.car.speed > 0 ? 1 : -1);
+                            gameState.car.angle -= scaledTurnSpeed * (gameState.car.speed > 0 ? 1 : -1);
                         }
                         if (keys.ArrowRight) {
-                            gameState.car.angle += TURN_SPEED * (gameState.car.speed > 0 ? 1 : -1);
+                            gameState.car.angle += scaledTurnSpeed * (gameState.car.speed > 0 ? 1 : -1);
                         }
                     }
 
-                    gameState.car.speed *= FRICTION;
+                    // Apply friction with time scaling
+                    gameState.car.speed *= Math.pow(FRICTION, deltaSeconds * 60);
                     gameState.car.speed = Math.max(-MAX_SPEED/2, Math.min(MAX_SPEED, gameState.car.speed));
 
-                    const newX = gameState.car.x + Math.cos(gameState.car.angle) * gameState.car.speed;
-                    const newY = gameState.car.y + Math.sin(gameState.car.angle) * gameState.car.speed;
+                    const newX = gameState.car.x + Math.cos(gameState.car.angle) * gameState.car.speed * deltaSeconds * 60;
+                    const newY = gameState.car.y + Math.sin(gameState.car.angle) * gameState.car.speed * deltaSeconds * 60;
                     
                     const nearestPoint = getNearestTrackPoint(newX, newY);
                     if (isPointInTrack(newX, newY, nearestPoint)) {
@@ -731,8 +740,16 @@
                 return Math.sqrt(dx * dx + dy * dy) < TRACK_WIDTH/2;
             }
 
-            function gameLoop() {
-                update();
+            let lastTime = 0;
+            function gameLoop(currentTime) {
+                // Calculate delta time
+                const deltaTime = currentTime - lastTime;
+                lastTime = currentTime;
+
+                // If this is the first frame, set deltaTime to a reasonable default
+                const safeDeltaTime = isNaN(deltaTime) ? 16.67 : deltaTime;
+
+                update(safeDeltaTime);
                 draw();
 
                 if (gameState.isRacing) {
@@ -745,6 +762,12 @@
 
                 requestAnimationFrame(gameLoop);
             }
+
+            // Start the game loop with initial time
+            requestAnimationFrame((time) => {
+                lastTime = time;
+                gameLoop(time);
+            });
 
             window.addEventListener('keydown', (e) => {
                 keys[e.key] = true;
