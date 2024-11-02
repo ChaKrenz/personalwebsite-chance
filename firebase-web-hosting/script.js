@@ -48,6 +48,121 @@ function thing(argument) {
 thing("Yo.");
 
 */
+
+// Get the name element
+// Get the name element
+const nameElement = document.querySelector('.name');
+
+// Create explosion particles
+function createExplosionParticles(mouseX, mouseY) {
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '0';
+    container.style.top = '0';
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.pointerEvents = 'none';
+    container.style.zIndex = '1000';
+    
+    // Colors for particles
+    const colors = [
+        '#8B0000', // Dark Red
+        '#006400', // Dark Green
+        '#4B0082', // Purple
+        '#00008B'  // Dark Blue
+    ];
+    
+    // Create multiple particles
+    const particles = [];
+    const particleCount = 250; // Increase or decrease for more/less particles
+    
+    for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        // Random size between 3 and 8 pixels
+        const size = 3 + Math.random() * 5;
+        
+        particle.style.position = 'fixed';
+        particle.style.width = `${size}px`;
+        particle.style.height = `${size}px`;
+        particle.style.borderRadius = '50%';
+        particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        // Start all particles from the mouse position
+        particle.style.left = `${mouseX}px`;
+        particle.style.top = `${mouseY}px`;
+        // Add glow effect
+        particle.style.boxShadow = `0 0 ${size}px ${particle.style.backgroundColor}`;
+        
+        container.appendChild(particle);
+        particles.push(particle);
+    }
+
+    document.body.appendChild(container);
+    return { container, particles };
+}
+
+// Animate explosion
+function animateExplosion(particles) {
+    particles.forEach(particle => {
+        // Random direction and speed for each particle
+        const angle = Math.random() * Math.PI * 2;
+        const velocity = 5 + Math.random() * 15;
+        const dx = Math.cos(angle) * velocity;
+        const dy = Math.sin(angle) * velocity;
+        let x = parseFloat(particle.style.left);
+        let y = parseFloat(particle.style.top);
+        let opacity = 5;
+        let scale = 0.5;
+        
+        // Animation loop
+        const animate = () => {
+            x += dx;
+            y += dy;
+            particle.style.left = `${x}px`;
+            particle.style.top = `${y}px`;
+            // Add some spin to the particles
+            particle.style.transform = `rotate(${x * 0.5}deg) scale(${scale})`;
+        };
+
+        // Fade out and shrink animation
+        const fadeOut = () => {
+            opacity -= 0.05;
+            scale -= 0.05;
+            particle.style.opacity = opacity;
+            particle.style.transform = `rotate(${x * 0.5}deg) scale(${scale})`;
+            if (opacity > 0) {
+                requestAnimationFrame(fadeOut);
+            }
+        };
+
+        // Run animation for 3 seconds
+        const interval = setInterval(animate, 16);
+        setTimeout(() => {
+            clearInterval(interval);
+            fadeOut();
+        }, 3000);
+    });
+}
+
+// Handle click event
+nameElement.addEventListener('click', (event) => {
+    // Get mouse position relative to viewport
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+    
+    // Hide original name
+    nameElement.style.opacity = '0';
+    
+    // Create and animate explosion from mouse position
+    const { container, particles } = createExplosionParticles(mouseX, mouseY);
+    animateExplosion(particles);
+    
+    // Clean up after animation
+    setTimeout(() => {
+        container.remove();
+        nameElement.style.opacity = '1';
+    }, 4000);
+});
+
 (function(w) {
 
     var canvas, ctx;
