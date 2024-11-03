@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gadget Runner Game</title>
+    <style>
+        /* Previous styles remain unchanged */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+        }
+
+        #game-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .player {
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            position: absolute;
+            border-radius: 5px;
+            transition: opacity 0.15s ease-in-out;
+        }
+
+        .player::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #2E7D32;
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            transition: left right 0.2s ease;
+        }
+
+        .player.facing-right::after {
+            right: 2px;
+        }
+
+        .player.facing-left::after {
+            left: 2px;
+        }
+
+        .platform {
+            position: absolute;
+            background: #666;
+            border-radius: 3px;
+        }
+
+        #hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            z-index: 1000;
+        }
+
+        #controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+
+        .controls-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .control-item {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .key {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #666;
+        }
+
+        .cooldown {
+            margin: 10px;
+        }
+
+        .cooldown-bar {
+            width: 100px;
+            height: 10px;
+            background: #333;
+            border: 1px solid #666;
+        }
+
+        .cooldown-progress {
+            height: 100%;
+            width: 100%;
+            background: #4CAF50;
+            transition: width 0.1s linear;
+        }
+
+        @keyframes teleportFade {
+            0% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        .teleporting {
+            animation: teleportFade 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="hud">
+            <div class="cooldown">
+                Jetpack:
+                <div class="cooldown-bar">
+                    <div id="jetpackCooldown" class="cooldown-progress"></div>
+                </div>
+            </div>
+
+            <div class="cooldown">
+                Teleport:
+                <div class="cooldown-bar">
+                    <div id="teleportCooldown" class="cooldown-progress"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div class="controls-title">CONTROLS</div>
+            <div class="control-item">
+                <span class="key">←</span>
+                <span>Move Left</span>
+            </div>
+            <div class="control-item">
+                <span class="key">→</span>
+                <span>Move Right</span>
+            </div>
+            <div class="control-item">
+                <span class="key">↑</span>
+                <span>Jump</span>
+            </div>
+            <div class="control-item">
+                <span class="key">X</span>
+                <span>Jetpack</span>
+            </div>
+            <div class="control-item">
+                <span class="key">C</span>
+                <span>Teleport</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Game constants remain the same
+        const GRAVITY = 0.5;
+        const JUMP_FORCE = 12;
+        const MOVE_SPEED = 5;
+        const TELEPORT_DISTANCE = 200;
+
+        // Game state
+        let jetpackFuel = 50;
+        let teleportCooldown = 0;
+        let isJetpackActive = false;
+        let canTeleport = true;
+
+        // Input state
+        const keys = {
+            left: false,
+            right: false,
+            up: false
+        };
+
+        // GameObject class and platform creation remain the same
+        class GameObject {
+            constructor(x, y, width, height, className) {
+                this.position = { x, y };
+                this.velocity = { x: 0, y: 0 };
+                this.width = width;
+                this.height = height;
+                this.facingRight = true;
+
+                this.element = document.createElement('div');
+                this.element.className = className;
+                this.element.style.width = `${width}px`;
+                this.element.style.height = `${height}px`;
+                
+                if (className === 'player') {
+                    this.element.classList.add('facing-right');
+                }
+                
+                document.getElementById('game-container').appendChild(this.element);
+                this.updatePosition();
+            }
+
+            updatePosition() {
+                this.element.style.left = `${this.position.x}px`;
+                this.element.style.top = `${this.position.y}px`;
+            }
+
+            setDirection(facingRight) {
+                if (this.facingRight !== facingRight) {
+                    this.facingRight = facingRight;
+                    this.element.classList.remove('facing-right', 'facing-left');
+                    this.element.classList.add(facingRight ? 'facing-right' : 'facing-left');
+                }
+            }
+
+            intersects(other) {
+                return this.position.x < other.position.x + other.width &&
+                       this.position.x + this.width > other.position.x &&
+                       this.position.y < other.position.y + other.height &&
+                       this.position.y + this.height > other.position.y;
+            }
+        }
+
+        // Create player and platforms
+        const player = new GameObject(100, 100, 30, 30, 'player');
+        let isOnGround = false;
+
+        function createPlatforms() {
+            const existingPlatforms = document.querySelectorAll('.platform');
+            existingPlatforms.forEach(platform => platform.remove());
+
+            const container = document.getElementById('game-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            return [
+                new GameObject(0, height - 20, width, 20, 'platform'),
+                new GameObject(width * 0.3, height * 0.7, width * 0.2, 20, 'platform'),
+                new GameObject(width * 0.1, height * 0.5, width * 0.2, 20, 'platform'),
+                new GameObject(width * 0.6, height * 0.3, width * 0.2, 20, 'platform')
+            ];
+        }
+
+        let platforms = createPlatforms();
+
+        window.addEventListener('resize', () => {
+            platforms = createPlatforms();
+        });
+
+        // Updated input handling with simplified controls
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    keys.left = true;
+                    break;
+                case 'ArrowRight':
+                    keys.right = true;
+                    break;
+                case 'ArrowUp':
+                    if (isOnGround) {
+                        player.velocity.y = -JUMP_FORCE;
+                    }
+                    keys.up = true;
+                    break;
+                case 'x':
+                    if (jetpackFuel > 0) {
+                        activateJetpack();
+                    }
+                    break;
+                case 'c':
+                    if (canTeleport) {
+                        teleport();
+                    }
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    keys.left = false;
+                    break;
+                case 'ArrowRight':
+                    keys.right = false;
+                    break;
+                case 'ArrowUp':
+                    keys.up = false;
+                    break;
+                case 'x':
+                    deactivateJetpack();
+                    break;
+            }
+        });
+
+        // Rest of the functions remain the same
+        function activateJetpack() {
+            isJetpackActive = true;
+        }
+
+        function deactivateJetpack() {
+            isJetpackActive = false;
+        }
+
+        function teleport() {
+            if (!canTeleport) return;
+            
+            const currentXVelocity = player.velocity.x; // Only preserve x velocity
+            player.velocity.x = 0;
+            player.velocity.y = 0;
+            player.element.classList.add('teleporting');
+            
+            setTimeout(() => {
+                const teleportOffset = player.facingRight ? TELEPORT_DISTANCE : -TELEPORT_DISTANCE;
+                player.position.x += teleportOffset;
+                
+                setTimeout(() => {
+                    player.element.classList.remove('teleporting');
+                    player.velocity.x = currentXVelocity; // Restore only x velocity
+                    player.velocity.y = 0; // Keep y velocity at 0
+                }, 150);
+                
+                canTeleport = false;
+                teleportCooldown = 75;
+                
+                const cooldownInterval = setInterval(() => {
+                    if (teleportCooldown > 0) {
+                        teleportCooldown -= 1;
+                        updateTeleportUI();
+                    } else {
+                        canTeleport = true;
+                        clearInterval(cooldownInterval);
+                    }
+                }, 50);
+            }, 150);
+        }
+
+        function updateJetpackUI() {
+            const jetpackBar = document.getElementById('jetpackCooldown');
+            jetpackBar.style.width = `${jetpackFuel}%`;
+        }
+
+        function updateTeleportUI() {
+            const teleportBar = document.getElementById('teleportCooldown');
+            teleportBar.style.width = `${75 - teleportCooldown}%`;
+        }
+
+        function gameLoop() {
+            if (keys.left) {
+                player.velocity.x = -MOVE_SPEED;
+                player.setDirection(false);
+            } else if (keys.right) {
+                player.velocity.x = MOVE_SPEED;
+                player.setDirection(true);
+            } else {
+                player.velocity.x = 0;
+            }
+
+            if (isJetpackActive && jetpackFuel > 0) {
+                if (player.velocity.y < -7.5) {
+                    player.velocity.y -= 0.2;
+                }
+                else {
+                    player.velocity.y -= 0.7;
+                }
+                jetpackFuel = Math.max(0, jetpackFuel - 1);
+                updateJetpackUI();
+            }
+
+            if (!isJetpackActive && jetpackFuel < 100) {
+                jetpackFuel = Math.min(100, jetpackFuel + 0.5);
+                updateJetpackUI();
+            }
+
+            player.velocity.y += GRAVITY;
+
+            player.position.x += player.velocity.x;
+            player.position.y += player.velocity.y;
+
+            isOnGround = false;
+            for (const platform of platforms) {
+                if (player.intersects(platform)) {
+                    if (player.velocity.y > 0 && 
+                        player.position.y + player.height - player.velocity.y <= platform.position.y) {
+                        player.position.y = platform.position.y - player.height;
+                        player.velocity.y = 0;
+                        isOnGround = true;
+                    } else if (player.velocity.y < 0 && 
+                             player.position.y - player.velocity.y >= platform.position.y + platform.height) {
+                        player.position.y = platform.position.y + platform.height;
+                        player.velocity.y = 0;
+                    }
+                }
+            }
+
+            const container = document.getElementById('game-container');
+            if (player.position.x < 0) player.position.x = 0;
+            if (player.position.x + player.width > container.clientWidth) {
+                player.position.x = container.clientWidth - player.width;
+            }
+            if (player.position.y < 0) player.position.y = 0;
+            if (player.position.y + player.height > container.clientHeight) {
+                player.position.y = container.clientHeight - player.height;
+                player.velocity.y = 0;
+                isOnGround = true;
+            }
+
+            player.updatePosition();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        gameLoop();
+        updateJetpackUI();
+        updateTeleportUI();
+    </script>
+</body>
+</html>
