@@ -49,12 +49,12 @@ thing("Yo.");
 
 */
 
-// Get the name element
-// Get the name element
 const nameElement = document.querySelector('.name');
+let isAnimating = false;
+let hasExploded = false; // New flag to track if explosion has occurred
 
-// Create explosion particles
-function createExplosionParticles(mouseX, mouseY) {
+// Create text fragments for explosion
+function createTextFragments(element, mouseX, mouseY) {
     const container = document.createElement('div');
     container.style.position = 'fixed';
     container.style.left = '0';
@@ -64,103 +64,128 @@ function createExplosionParticles(mouseX, mouseY) {
     container.style.pointerEvents = 'none';
     container.style.zIndex = '1000';
     
-    // Colors for particles
-    const colors = [
-        '#8B0000', // Dark Red
-        '#006400', // Dark Green
-        '#4B0082', // Purple
-        '#00008B'  // Dark Blue
-    ];
+    const fragments = [];
+    const fragmentCount = 20;
     
-    // Create multiple particles
-    const particles = [];
-    const particleCount = 250; // Increase or decrease for more/less particles
+    const computedStyle = window.getComputedStyle(element);
+    const originalText = element.textContent;
+    const rect = element.getBoundingClientRect();
     
-    for (let i = 0; i < particleCount; i++) {
-        const particle = document.createElement('div');
-        // Random size between 3 and 8 pixels
-        const size = 3 + Math.random() * 5;
+    function createPolygonPath() {
+        const size = 20 + Math.random() * 30;
+        const points = [];
+        const numPoints = 5 + Math.floor(Math.random() * 4);
         
-        particle.style.position = 'fixed';
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
-        particle.style.borderRadius = '50%';
-        particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-        // Start all particles from the mouse position
-        particle.style.left = `${mouseX}px`;
-        particle.style.top = `${mouseY}px`;
-        // Add glow effect
-        particle.style.boxShadow = `0 0 ${size}px ${particle.style.backgroundColor}`;
+        for (let i = 0; i < numPoints; i++) {
+            const angle = (i / numPoints) * Math.PI * 2;
+            const radius = size * (0.8 + Math.random() * 0.4);
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            points.push(`${x},${y}`);
+        }
         
-        container.appendChild(particle);
-        particles.push(particle);
+        return points.join(' ');
+    }
+
+    for (let i = 0; i < fragmentCount; i++) {
+        const fragment = document.createElement('div');
+        
+        const randomX = rect.left + Math.random() * rect.width;
+        const randomY = rect.top + Math.random() * rect.height;
+        
+        fragment.style.position = 'fixed';
+        fragment.style.left = `${randomX}px`;
+        fragment.style.top = `${randomY}px`;
+        fragment.style.fontFamily = computedStyle.fontFamily;
+        fragment.style.fontSize = computedStyle.fontSize;
+        fragment.style.fontWeight = computedStyle.fontWeight;
+        fragment.style.color = computedStyle.color;
+        fragment.style.transformOrigin = 'center';
+        
+        const clipPath = createPolygonPath();
+        fragment.style.clipPath = `polygon(${clipPath})`;
+        
+        fragment.style.textShadow = '2px 2px 4px rgba(0,0,0,0.2)';
+        
+        const startPos = Math.floor(Math.random() * originalText.length);
+        const length = 1 + Math.floor(Math.random() * 2);
+        fragment.textContent = originalText.substr(startPos, length);
+        
+        container.appendChild(fragment);
+        fragments.push({
+            element: fragment,
+            initialX: randomX,
+            initialY: randomY
+        });
     }
 
     document.body.appendChild(container);
-    return { container, particles };
+    return { container, fragments };
 }
 
-// Animate explosion
-function animateExplosion(particles) {
-    particles.forEach(particle => {
-        // Random direction and speed for each particle
-        const angle = Math.random() * Math.PI * 2;
-        const velocity = 5 + Math.random() * 15;
-        const dx = Math.cos(angle) * velocity;
-        const dy = Math.sin(angle) * velocity;
-        let x = parseFloat(particle.style.left);
-        let y = parseFloat(particle.style.top);
-        let opacity = 5;
-        let scale = 0.5;
+// Animate fragments
+function animateFragments(fragments, mouseX, mouseY) {
+    fragments.forEach(fragment => {
+        const dx = fragment.initialX - mouseX;
+        const dy = fragment.initialY - mouseY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
         
-        // Animation loop
+        const baseSpeed = 5 + Math.random() * 10;
+        const velocity = baseSpeed * (1 + distance * 0.01);
+        
+        let x = fragment.initialX;
+        let y = fragment.initialY;
+        let rotation = Math.random() * 360;
+        let scale = 1;
+        let opacity = 1;
+        
         const animate = () => {
-            x += dx;
-            y += dy;
-            particle.style.left = `${x}px`;
-            particle.style.top = `${y}px`;
-            // Add some spin to the particles
-            particle.style.transform = `rotate(${x * 0.5}deg) scale(${scale})`;
+            x += Math.cos(angle) * velocity;
+            y += Math.sin(angle) * velocity;
+            
+            rotation += velocity * 2;
+            scale -= 0.01;
+            opacity -= 0.02;
+            
+            fragment.element.style.transform = `translate(${x - fragment.initialX}px, ${y - fragment.initialY}px) 
+                                             rotate(${rotation}deg) 
+                                             scale(${scale})`;
+            fragment.element.style.opacity = opacity;
         };
 
-        // Fade out and shrink animation
-        const fadeOut = () => {
-            opacity -= 0.05;
-            scale -= 0.05;
-            particle.style.opacity = opacity;
-            particle.style.transform = `rotate(${x * 0.5}deg) scale(${scale})`;
-            if (opacity > 0) {
-                requestAnimationFrame(fadeOut);
+        const interval = setInterval(() => {
+            if (opacity <= 0) {
+                clearInterval(interval);
+            } else {
+                animate();
             }
-        };
-
-        // Run animation for 3 seconds
-        const interval = setInterval(animate, 16);
-        setTimeout(() => {
-            clearInterval(interval);
-            fadeOut();
-        }, 3000);
+        }, 16);
     });
 }
 
 // Handle click event
 nameElement.addEventListener('click', (event) => {
-    // Get mouse position relative to viewport
-    const mouseX = event.clientX;
-    const mouseY = event.clientY;
-    
-    // Hide original name
-    nameElement.style.opacity = '0';
-    
-    // Create and animate explosion from mouse position
-    const { container, particles } = createExplosionParticles(mouseX, mouseY);
-    animateExplosion(particles);
-    
-    // Clean up after animation
-    setTimeout(() => {
-        container.remove();
-        nameElement.style.opacity = '1';
-    }, 4000);
+    // Only allow explosion if not currently animating and hasn't exploded yet
+    if (!isAnimating && !hasExploded) {
+        isAnimating = true;
+        hasExploded = true; // Set flag to prevent future explosions
+        
+        const mouseX = event.clientX;
+        const mouseY = event.clientY;
+        
+        nameElement.style.opacity = '0';
+        
+        const { container, fragments } = createTextFragments(nameElement, mouseX, mouseY);
+        animateFragments(fragments, mouseX, mouseY);
+        
+        setTimeout(() => {
+            container.remove();
+            // Don't reset the opacity to 1
+            nameElement.style.display = 'none'; // Completely hide the element
+            isAnimating = false;
+        }, 2000);
+    }
 });
 
 (function(w) {
@@ -213,7 +238,7 @@ window.addEventListener('resize', function() {
     // You'll need to call your canvas resize function here
     // For example: resizeCanvas(canvas_width, canvas_height);
 });
-    var speck_count = 5000; //This determines how many particles will be made.
+    var speck_count = 10000; //This determines how many particles will be made.
     
     var vec_cells = []; //The array that will contain the grid cells
     var particles = []; //The array that will contain the particles
@@ -432,11 +457,11 @@ window.addEventListener('resize', function() {
                         let m = v - c;
                         let r, g, b;
                         
-                        if (h < 60) { r = c; g = x; b = 0; }
-                        else if (h < 120) { r = x; g = c; b = 0; }
-                        else if (h < 180) { r = 0; g = c; b = x; }
-                        else if (h < 240) { r = 0; g = x; b = c; }
-                        else if (h < 300) { r = x; g = 0; b = c; }
+                        if (h < 40) { r = c; g = x; b = 0; }
+                        else if (h < 100) { r = x; g = c; b = 0; }
+                        else if (h < 160) { r = 0; g = c; b = x; }
+                        else if (h < 220) { r = 0; g = x; b = c; }
+                        else if (h < 280) { r = x; g = 0; b = c; }
                         else { r = c; g = 0; b = x; }
                         
                         return {
