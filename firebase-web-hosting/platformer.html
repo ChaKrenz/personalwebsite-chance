@@ -10,9 +10,11 @@
         }
 
         #game-container {
-            width: 100vw;
-            height: 100vh;
+            width: 1200px;
+            height: 800px;
             position: relative;
+            margin: 0 auto;
+            background: #1a1a1a;
         }
 
         .player {
@@ -280,122 +282,115 @@
             platforms = [];
             lavaBlocks = [];
 
-            const container = document.getElementById('game-container');
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-
-            // Reset player position and states
-            player.position = { ...spawnPoint };
-            player.velocity = { x: 0, y: 0 };
+            // Reset player states
             canDoubleJump = true;
             canDash = true;
 
             switch(levelNumber) {
                 case 1:
-                    spawnPoint = { x: 50, y: height - 100 };
+                    spawnPoint = { x: 50, y: 700 };
                     platforms = [
-                        new GameObject(0, height - 20, width, 20, 'platform')
+                        new GameObject(0, 750, 1200, 20, 'platform')
                     ];
-                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
-                    createTutorialSign(width/2, height/2, "Use ← → to move");
-                    createTutorialSign(width/2, height/2 + 50, "Press ↑ to jump");
-                    createTutorialSign(width/2, height/2 + 100, "Reach the green circle!");
+                    goal = new GameObject(1100, 700, 30, 30, 'goal');
+                    createTutorialSign(600, 400, "Use ← → to move");
+                    createTutorialSign(600, 450, "Press ↑ to jump");
+                    createTutorialSign(600, 500, "Reach the green circle!");
                     break;
 
                 case 2:
-                spawnPoint = { x: 50, y: height - 100 };
+                    spawnPoint = { x: 50, y: 700 };
                     platforms = [
-                        new GameObject(0, height - 20, width * 0.3, 20, 'platform'),
-                        new GameObject(width * 0.5, height - 20, width * 0.5, 20, 'platform')
+                        new GameObject(0, 750, 400, 20, 'platform'),
+                        new GameObject(600, 750, 600, 20, 'platform')
                     ];
                     lavaBlocks = [
-                        new GameObject(width * 0.3, height - 20, width * 0.2, 20, 'lava')
+                        new GameObject(400, 750, 200, 20, 'lava')
                     ];
-                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
-                    createTutorialSign(width/2, height/2, "Avoid the red lava!"); // Centered text
+                    goal = new GameObject(1100, 700, 30, 30, 'goal');
+                    createTutorialSign(600, 400, "Avoid the red lava!");
                     break;
 
                 case 3:
-                    spawnPoint = { x: 50, y: height - 100 };
+                    spawnPoint = { x: 50, y: 700 };
                     platforms = [
-                        new GameObject(0, height - 20, width * 0.2, 20, 'platform'),
-                        new GameObject(width * 0.5, height - 20, width * 0.2, 20, 'platform'),
-                        new GameObject(width * 0.8, height - 20, width * 0.2, 20, 'platform')
+                        new GameObject(0, 750, 300, 20, 'platform'),
+                        new GameObject(500, 750, 300, 20, 'platform'),
+                        new GameObject(900, 750, 300, 20, 'platform')
                     ];
                     lavaBlocks = [
-                        new GameObject(width * 0.2, height - 20, width * 0.3, 20, 'lava'),
-                        new GameObject(width * 0.7, height - 20, width * 0.1, 20, 'lava')
+                        new GameObject(300, 750, 200, 20, 'lava'),
+                        new GameObject(800, 750, 100, 20, 'lava')
                     ];
-                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
-                    createTutorialSign(width/2, height/2, "Press C to dash!");
+                    goal = new GameObject(1100, 700, 30, 30, 'goal');
+                    createTutorialSign(600, 400, "Press C to dash!");
                     break;
 
                 case 4:
-                    spawnPoint = { x: 50, y: height - 100 };
+                    spawnPoint = { x: 50, y: 700 };
                     platforms = [
-                        new GameObject(0, height - 20, width * 0.3, 20, 'platform'),
-                        new GameObject(width * 0.7, height - 20, width * 0.3, 20, 'platform')
+                        new GameObject(0, 750, 400, 20, 'platform'),
+                        new GameObject(800, 750, 400, 20, 'platform')
                     ];
                     lavaBlocks = [
-                        new GameObject(width * 0.3, height - 20, width * 0.4, 20, 'lava')
+                        new GameObject(400, 750, 400, 20, 'lava')
                     ];
-                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
-                    createTutorialSign(width/2, height/2, "Press ↑ twice for double jump!");
+                    goal = new GameObject(1100, 700, 30, 30, 'goal');
+                    createTutorialSign(600, 400, "Press ↑ twice for double jump!");
                     break;
-                    
 
-                case 5: // Vertical Challenge
-                    spawnPoint = { x: 50, y: height - 100 };
+                case 5:
+                    spawnPoint = { x: 50, y: 700 };
                     platforms = [
-                        new GameObject(0, height - 20, width * 0.2, 20, 'platform'),
-                        new GameObject(width * 0.4, height * 0.75, width * 0.2, 20, 'platform'),
-                        new GameObject(width * 0.1, height * 0.45, width * 0.2, 20, 'platform'),
-                        new GameObject(width * 0.6, height * 0.2, width * 0.2, 20, 'platform')
+                        new GameObject(0, 750, 200, 20, 'platform'),
+                        new GameObject(400, 600, 200, 20, 'platform'),
+                        new GameObject(100, 400, 200, 20, 'platform'),
+                        new GameObject(700, 200, 200, 20, 'platform')
                     ];
                     lavaBlocks = [
-                        new GameObject(0, height - 20, width, 20, 'lava')
+                        new GameObject(0, 750, 1200, 20, 'lava')
                     ];
                     platforms[0].element.style.zIndex = "1";
-                    goal = new GameObject(width - 100, height * 0.2 - 50, 30, 30, 'goal');
+                    goal = new GameObject(1100, 150, 30, 30, 'goal');
                     break;
 
-                    case 6:
-                    spawnPoint = { x: 50, y: height - 100 };
+                case 6:
+                    spawnPoint = { x: 50, y: 700 };
                     platforms = [
-                        new GameObject(0, height - 20, width * 0.15, 20, 'platform'),
-                        new GameObject(width * 0.25, height - 20, width * 0.15, 20, 'platform'),
-                        new GameObject(width * 0.5, height - 20, width * 0.15, 20, 'platform'),
-                        new GameObject(width * 0.75, height - 20, width * 0.15, 20, 'platform'),
-                        new GameObject(width * 0.3, height * 0.7, width * 0.15, 20, 'platform'),  // Lowered from 0.6 to 0.7
-                        new GameObject(width * 0.6, height * 0.5, width * 0.15, 20, 'platform')   // Lowered from 0.4 to 0.5
+                        new GameObject(0, 750, 200, 20, 'platform'),
+                        new GameObject(300, 750, 200, 20, 'platform'),
+                        new GameObject(600, 750, 200, 20, 'platform'),
+                        new GameObject(900, 750, 200, 20, 'platform'),
+                        new GameObject(300, 600, 200, 20, 'platform'),
+                        new GameObject(700, 400, 200, 20, 'platform')
                     ];
                     lavaBlocks = [
-                        new GameObject(width * 0.15, height - 20, width * 0.1, 20, 'lava'),
-                        new GameObject(width * 0.4, height - 20, width * 0.1, 20, 'lava'),
-                        new GameObject(width * 0.65, height - 20, width * 0.1, 20, 'lava'),
-                        new GameObject(width * 0.9, height - 20, width * 0.1, 20, 'lava')
+                        new GameObject(200, 750, 100, 20, 'lava'),
+                        new GameObject(500, 750, 100, 20, 'lava'),
+                        new GameObject(800, 750, 100, 20, 'lava'),
+                        new GameObject(1100, 750, 100, 20, 'lava')
                     ];
-                    goal = new GameObject(width - 100, height * 0.5 - 50, 30, 30, 'goal'); // Adjusted goal height to match new platform
+                    goal = new GameObject(1100, 350, 30, 30, 'goal');
                     break;
 
-                case 7: // Final Challenge
-                    spawnPoint = { x: 50, y: height - 100 };
+                case 7:
+                    spawnPoint = { x: 50, y: 700 };
                     platforms = [
-                        new GameObject(0, height - 20, width * 0.1, 20, 'platform'),
-                        new GameObject(width * 0.2, height * 0.8, width * 0.1, 20, 'platform'),
-                        new GameObject(width * 0.4, height * 0.6, width * 0.1, 20, 'platform'),
-                        new GameObject(width * 0.57, height * 0.52, width * 0.3, 20, 'platform'),
-                        new GameObject(width * 0.6, height * 0.4, width * 0.1, 20, 'platform'),
-                        new GameObject(width * 0.8, height * 0.22, width * 0.1, 20, 'platform')
+                        new GameObject(0, 750, 150, 20, 'platform'),
+                        new GameObject(250, 650, 150, 20, 'platform'),
+                        new GameObject(500, 500, 150, 20, 'platform'),
+                        new GameObject(700, 450, 300, 20, 'platform'),
+                        new GameObject(750, 300, 150, 20, 'platform'),
+                        new GameObject(1000, 200, 150, 20, 'platform')
                     ];
                     lavaBlocks = [
-                        new GameObject(0, height - 20, width, 20, 'lava'),
-                        new GameObject(width * 0.35, height * 0.7, width * 0.45, 20, 'lava'),
-                        new GameObject(width * 0.2, height * 0.4, width * 0.6, 20, 'lava')
+                        new GameObject(0, 750, 1200, 20, 'lava'),
+                        new GameObject(400, 600, 500, 20, 'lava'),
+                        new GameObject(200, 350, 700, 20, 'lava')
                     ];
                     platforms[0].element.style.zIndex = "1";
-                    goal = new GameObject(width - 100, height * 0.2 - 50, 30, 30, 'goal');
-                    createTutorialSign(width/2, height/4, "Final challenge!");
+                    goal = new GameObject(1100, 150, 30, 30, 'goal');
+                    createTutorialSign(600, 200, "Final challenge!");
                     break;
             }
 
@@ -494,6 +489,9 @@ function dash() {
                         player.velocity.x = 0;
                     }
                 }
+                if (goal && player.intersects(goal)) {
+                completeLevel();
+                }
             }
 
             // Update the lava collision to reset dash ability
@@ -516,6 +514,19 @@ function dash() {
                     currentLevel = 1;
                     createLevel(currentLevel);
                 }
+            }
+        }
+
+        async function completeLevel() {
+            if (currentLevel < 7) {
+                currentLevel++;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                createLevel(currentLevel);
+            } else {
+                alert('Congratulations! You beat all levels!');
+                currentLevel = 1;
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                createLevel(currentLevel);
             }
         }
 
