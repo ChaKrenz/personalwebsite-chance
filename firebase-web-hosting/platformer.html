@@ -160,26 +160,30 @@
         <div id="hud">
         </div>
 
-        <div id="controls">
-            <div class="controls-title">CONTROLS</div>
-            <div class="control-item">
-                <span class="key">←</span>
-                <span>Move Left</span>
-            </div>
-            <div class="control-item">
-                <span class="key">→</span>
-                <span>Move Right</span>
-            </div>
-            <div class="control-item">
-                <span class="key">↑</span>
-                <span>Jump/Double Jump</span>
-            </div>
-            <div class="control-item">
-                <span class="key">C</span>
-                <span>Dash</span>
+        <div id="game-container">
+            <div id="level-display">Level 1</div>
+            <div id="timer-display" style="position: fixed; top: 40px; left: 50%; transform: translateX(-50%); color: white; font-family: monospace; font-size: 24px; z-index: 1000;">Time: 00:00.00</div>
+            <div id="hud"></div>
+            <div id="controls">
+                <div class="controls-title">CONTROLS</div>
+                <div class="control-item">
+                    <span class="key">←</span>
+                    <span>Move Left</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">→</span>
+                    <span>Move Right</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">↑</span>
+                    <span>Jump/Double Jump</span>
+                </div>
+                <div class="control-item">
+                    <span class="key">C</span>
+                    <span>Dash</span>
+                </div>
             </div>
         </div>
-    </div>
 
     <script>
         const GRAVITY = 0.5;
@@ -192,6 +196,10 @@
         let dashStartX = 0;
         let dashTargetX = 0;
         let dashProgress = 0;
+        let gameTimer = null;
+        let startTime = null;
+        let hasGameStarted = false;
+        let finalTime = null;
         // Remove the duplicate declaration of 'canDash'
         const DASH_DURATION = 10;
 
@@ -254,6 +262,97 @@
             }
         }
 
+        // Add this new function to handle game start
+function startGameTimer() {
+    if (!hasGameStarted) {
+        hasGameStarted = true;
+        startTime = Date.now();
+        gameTimer = setInterval(updateTimer, 10); // Update every 10ms for smooth display
+    }
+}
+
+// Add this function to format the time
+function formatTime(ms) {
+    const totalSeconds = ms / 1000;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    const milliseconds = Math.floor((ms % 1000) / 10);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+}
+
+// Add this function to update the timer display
+function updateTimer() {
+    if (startTime) {
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - startTime;
+        const timerDisplay = document.getElementById('timer-display');
+        if (timerDisplay) {
+            timerDisplay.textContent = `Time: ${formatTime(elapsedTime)}`;
+        }
+    }
+}
+
+// Add this function to create the victory screen
+function createVictoryScreen(finalTimeMs) {
+    // Clear the game container
+    const container = document.getElementById('game-container');
+    container.innerHTML = '';
+
+    // Create and style the victory screen
+    const victoryScreen = document.createElement('div');
+    victoryScreen.style.position = 'absolute';
+    victoryScreen.style.top = '50%';
+    victoryScreen.style.left = '50%';
+    victoryScreen.style.transform = 'translate(-50%, -50%)';
+    victoryScreen.style.textAlign = 'center';
+    victoryScreen.style.color = 'white';
+    victoryScreen.style.fontFamily = 'monospace';
+    victoryScreen.style.fontSize = '24px';
+
+    // Add victory text and time
+    const victoryText = document.createElement('h1');
+    victoryText.textContent = 'Congratulations!';
+    victoryText.style.color = '#4CAF50';
+    victoryText.style.fontSize = '48px';
+    victoryText.style.marginBottom = '20px';
+
+    const timeText = document.createElement('p');
+    timeText.textContent = `Final Time: ${formatTime(finalTimeMs)}`;
+    timeText.style.fontSize = '36px';
+    timeText.style.marginBottom = '40px';
+
+    const restartButton = document.createElement('button');
+    restartButton.textContent = 'Play Again';
+    restartButton.style.padding = '15px 30px';
+    restartButton.style.fontSize = '20px';
+    restartButton.style.backgroundColor = '#4CAF50';
+    restartButton.style.border = 'none';
+    restartButton.style.borderRadius = '5px';
+    restartButton.style.color = 'white';
+    restartButton.style.cursor = 'pointer';
+    restartButton.onmouseover = () => restartButton.style.backgroundColor = '#45a049';
+    restartButton.onmouseout = () => restartButton.style.backgroundColor = '#4CAF50';
+    
+    restartButton.onclick = () => {
+        // Reset all game states
+        hasGameStarted = false;
+        startTime = null;
+        if (gameTimer) {
+            clearInterval(gameTimer);
+            gameTimer = null;
+        }
+        currentLevel = 1;
+        container.innerHTML = originalHtml; // We'll define this variable below
+        createLevel(1);
+        gameLoop();
+    };
+
+    victoryScreen.appendChild(victoryText);
+    victoryScreen.appendChild(timeText);
+    victoryScreen.appendChild(restartButton);
+    container.appendChild(victoryScreen);
+}
+
         function createTutorialSign(x, y, text) {
             const sign = document.createElement('div');
             sign.className = 'tutorial-sign';
@@ -272,131 +371,135 @@
         let goal = null;
 
         function createLevel(levelNumber) {
-            // Clear existing level
-            platforms.forEach(p => p.remove());
-            lavaBlocks.forEach(l => l.remove());
-            if (goal) goal.remove();
-            tutorialSigns.forEach(sign => sign.remove());
-            tutorialSigns = [];
+    // Clear existing level
+    platforms.forEach(p => p.remove());
+    lavaBlocks.forEach(l => l.remove());
+    if (goal) goal.remove();
+    tutorialSigns.forEach(sign => sign.remove());
+    tutorialSigns = [];
 
-            platforms = [];
-            lavaBlocks = [];
+    platforms = [];
+    lavaBlocks = [];
 
-            // Reset player states
-            canDoubleJump = true;
-            canDash = true;
+    // Reset player states
+    canDoubleJump = true;
+    canDash = true;
+    
+    // Update level display immediately
+    document.getElementById('level-display').textContent = `Level ${levelNumber}`;
 
-            switch(levelNumber) {
-                case 1:
-                    spawnPoint = { x: 50, y: 700 };
-                    platforms = [
-                        new GameObject(0, 750, 1200, 20, 'platform')
-                    ];
-                    goal = new GameObject(1100, 700, 30, 30, 'goal');
-                    createTutorialSign(600, 400, "Use ← → to move");
-                    createTutorialSign(600, 450, "Press ↑ to jump");
-                    createTutorialSign(600, 500, "Reach the green circle!");
-                    break;
+    switch(levelNumber) {
+        case 1:
+            spawnPoint = { x: 50, y: 700 };
+            platforms = [
+                new GameObject(0, 750, 1200, 20, 'platform')
+            ];
+            goal = new GameObject(1100, 700, 30, 30, 'goal');
+            createTutorialSign(600, 400, "Use ← → to move");
+            createTutorialSign(600, 450, "Press ↑ to jump");
+            createTutorialSign(600, 500, "Reach the green circle!");
+            break;
 
-                case 2:
-                    spawnPoint = { x: 50, y: 700 };
-                    platforms = [
-                        new GameObject(0, 750, 400, 20, 'platform'),
-                        new GameObject(600, 750, 600, 20, 'platform')
-                    ];
-                    lavaBlocks = [
-                        new GameObject(400, 750, 200, 20, 'lava')
-                    ];
-                    goal = new GameObject(1100, 700, 30, 30, 'goal');
-                    createTutorialSign(600, 400, "Avoid the red lava!");
-                    break;
+        case 2:
+            spawnPoint = { x: 50, y: 700 };
+            platforms = [
+                new GameObject(0, 750, 400, 20, 'platform'),
+                new GameObject(600, 750, 600, 20, 'platform')
+            ];
+            lavaBlocks = [
+                new GameObject(400, 750, 200, 20, 'lava')
+            ];
+            goal = new GameObject(1100, 700, 30, 30, 'goal');
+            createTutorialSign(600, 400, "Avoid the red lava!");
+            break;
 
-                case 3:
-                    spawnPoint = { x: 50, y: 700 };
-                    platforms = [
-                        new GameObject(0, 750, 300, 20, 'platform'),
-                        new GameObject(500, 750, 300, 20, 'platform'),
-                        new GameObject(900, 750, 300, 20, 'platform')
-                    ];
-                    lavaBlocks = [
-                        new GameObject(300, 750, 200, 20, 'lava'),
-                        new GameObject(800, 750, 100, 20, 'lava')
-                    ];
-                    goal = new GameObject(1100, 700, 30, 30, 'goal');
-                    createTutorialSign(600, 400, "Press C to dash!");
-                    break;
+        case 3:
+            spawnPoint = { x: 50, y: 700 };
+            platforms = [
+                new GameObject(0, 750, 300, 20, 'platform'),
+                new GameObject(500, 750, 300, 20, 'platform'),
+                new GameObject(900, 750, 300, 20, 'platform')
+            ];
+            lavaBlocks = [
+                new GameObject(300, 750, 200, 20, 'lava'),
+                new GameObject(800, 750, 100, 20, 'lava')
+            ];
+            goal = new GameObject(1100, 700, 30, 30, 'goal');
+            createTutorialSign(600, 400, "Press C to dash!");
+            break;
 
-                case 4:
-                    spawnPoint = { x: 50, y: 700 };
-                    platforms = [
-                        new GameObject(0, 750, 400, 20, 'platform'),
-                        new GameObject(800, 750, 400, 20, 'platform')
-                    ];
-                    lavaBlocks = [
-                        new GameObject(400, 750, 400, 20, 'lava')
-                    ];
-                    goal = new GameObject(1100, 700, 30, 30, 'goal');
-                    createTutorialSign(600, 400, "Press ↑ twice for double jump!");
-                    break;
+        case 4:
+            spawnPoint = { x: 50, y: 700 };
+            platforms = [
+                new GameObject(0, 750, 400, 20, 'platform'),
+                new GameObject(800, 750, 400, 20, 'platform')
+            ];
+            lavaBlocks = [
+                new GameObject(400, 750, 400, 20, 'lava')
+            ];
+            goal = new GameObject(1100, 700, 30, 30, 'goal');
+            createTutorialSign(600, 400, "Press ↑ twice for double jump!");
+            break;
 
-                case 5:
-                    spawnPoint = { x: 50, y: 700 };
-                    platforms = [
-                        new GameObject(0, 750, 200, 20, 'platform'),
-                        new GameObject(400, 600, 200, 20, 'platform'),
-                        new GameObject(100, 400, 200, 20, 'platform'),
-                        new GameObject(700, 200, 200, 20, 'platform')
-                    ];
-                    lavaBlocks = [
-                        new GameObject(0, 750, 1200, 20, 'lava')
-                    ];
-                    platforms[0].element.style.zIndex = "1";
-                    goal = new GameObject(1100, 150, 30, 30, 'goal');
-                    break;
+        case 5:
+            spawnPoint = { x: 50, y: 700 };
+            platforms = [
+                new GameObject(0, 750, 200, 20, 'platform'),
+                new GameObject(400, 600, 200, 20, 'platform'),
+                new GameObject(100, 400, 200, 20, 'platform'),
+                new GameObject(700, 200, 200, 20, 'platform')
+            ];
+            lavaBlocks = [
+                new GameObject(0, 770, 1200, 20, 'lava')
+            ];
+            platforms[0].element.style.zIndex = "1";
+            goal = new GameObject(1100, 150, 30, 30, 'goal');
+            break;
 
-                case 6:
-                    spawnPoint = { x: 50, y: 700 };
-                    platforms = [
-                        new GameObject(0, 750, 200, 20, 'platform'),
-                        new GameObject(300, 750, 200, 20, 'platform'),
-                        new GameObject(600, 750, 200, 20, 'platform'),
-                        new GameObject(900, 750, 200, 20, 'platform'),
-                        new GameObject(300, 600, 200, 20, 'platform'),
-                        new GameObject(700, 400, 200, 20, 'platform')
-                    ];
-                    lavaBlocks = [
-                        new GameObject(200, 750, 100, 20, 'lava'),
-                        new GameObject(500, 750, 100, 20, 'lava'),
-                        new GameObject(800, 750, 100, 20, 'lava'),
-                        new GameObject(1100, 750, 100, 20, 'lava')
-                    ];
-                    goal = new GameObject(1100, 350, 30, 30, 'goal');
-                    break;
+        case 6:
+            spawnPoint = { x: 50, y: 700 };
+            platforms = [
+                new GameObject(0, 750, 200, 20, 'platform'),
+                new GameObject(300, 750, 200, 20, 'platform'),
+                new GameObject(600, 750, 200, 20, 'platform'),
+                new GameObject(900, 750, 200, 20, 'platform'),
+                new GameObject(300, 600, 200, 20, 'platform'),
+                new GameObject(700, 400, 200, 20, 'platform')
+            ];
+            lavaBlocks = [
+                new GameObject(200, 750, 100, 20, 'lava'),
+                new GameObject(500, 750, 100, 20, 'lava'),
+                new GameObject(800, 750, 100, 20, 'lava'),
+                new GameObject(1100, 750, 100, 20, 'lava')
+            ];
+            goal = new GameObject(1100, 350, 30, 30, 'goal');
+            break;
 
-                case 7:
-                    spawnPoint = { x: 50, y: 700 };
-                    platforms = [
-                        new GameObject(0, 750, 150, 20, 'platform'),
-                        new GameObject(250, 650, 150, 20, 'platform'),
-                        new GameObject(500, 500, 150, 20, 'platform'),
-                        new GameObject(700, 450, 300, 20, 'platform'),
-                        new GameObject(750, 300, 150, 20, 'platform'),
-                        new GameObject(1000, 200, 150, 20, 'platform')
-                    ];
-                    lavaBlocks = [
-                        new GameObject(0, 750, 1200, 20, 'lava'),
-                        new GameObject(400, 600, 500, 20, 'lava'),
-                        new GameObject(200, 350, 700, 20, 'lava')
-                    ];
-                    platforms[0].element.style.zIndex = "1";
-                    goal = new GameObject(1100, 150, 30, 30, 'goal');
-                    createTutorialSign(600, 200, "Final challenge!");
-                    break;
-            }
+        case 7:
+            spawnPoint = { x: 50, y: 700 };
+            platforms = [
+                new GameObject(0, 750, 150, 20, 'platform'),
+                new GameObject(250, 650, 150, 20, 'platform'),
+                new GameObject(500, 500, 150, 20, 'platform'),
+                new GameObject(700, 450, 300, 20, 'platform'),
+                new GameObject(750, 300, 150, 20, 'platform'),
+                new GameObject(1000, 200, 150, 20, 'platform')
+            ];
+            lavaBlocks = [
+                new GameObject(0, 770, 1200, 20, 'lava'),
+                new GameObject(400, 600, 500, 20, 'lava'),
+                new GameObject(200, 350, 700, 20, 'lava')
+            ];
+            platforms[0].element.style.zIndex = "1";
+            goal = new GameObject(1100, 150, 30, 30, 'goal');
+            createTutorialSign(600, 200, "Final challenge!");
+            break;
+    }
 
-            document.getElementById('level-display').textContent = `Level ${levelNumber}`;
-            player.position = { ...spawnPoint };
-        }
+    // Reset player position to spawn point
+    player.position = { ...spawnPoint };
+    player.velocity = { x: 0, y: 0 };
+}
 
         // Update the dash function to remove cooldown logic
 function dash() {
@@ -458,77 +561,127 @@ function dash() {
         });
 
         function checkCollisions() {
-            isOnGround = false;
-            for (const platform of platforms) {
-                if (player.intersects(platform)) {
-                    if (player.velocity.y > 0 && 
-                        player.position.y + player.height - player.velocity.y <= platform.position.y) {
-                        player.position.y = platform.position.y - player.height;
-                        player.velocity.y = 0;
-                        isOnGround = true;
-                        canDoubleJump = true;
-                        canDash = true;  // Reset dash when touching ground
-                    } else if (player.velocity.y < 0 && 
-                            player.position.y - player.velocity.y >= platform.position.y + platform.height) {
-                        player.position.y = platform.position.y + platform.height;
-                        player.velocity.y = 0;
-                    }
-                    else if (player.velocity.x > 0 || (isDashing && dashTargetX > dashStartX)) {
-                        player.position.x = platform.position.x - player.width;
-                        if (isDashing) {
-                            isDashing = false;
-                            player.element.classList.remove('dashing');
-                        }
-                        player.velocity.x = 0;
-                    } else if (player.velocity.x < 0 || (isDashing && dashTargetX < dashStartX)) {
-                        player.position.x = platform.position.x + platform.width;
-                        if (isDashing) {
-                            isDashing = false;
-                            player.element.classList.remove('dashing');
-                        }
-                        player.velocity.x = 0;
-                    }
-                }
-                if (goal && player.intersects(goal)) {
-                completeLevel();
-                }
+    isOnGround = false;
+    for (const platform of platforms) {
+        if (player.intersects(platform)) {
+            if (player.velocity.y > 0 && 
+                player.position.y + player.height - player.velocity.y <= platform.position.y) {
+                player.position.y = platform.position.y - player.height;
+                player.velocity.y = 0;
+                isOnGround = true;
+                canDoubleJump = true;
+                canDash = true;  // Reset dash when touching ground
+            } else if (player.velocity.y < 0 && 
+                    player.position.y - player.velocity.y >= platform.position.y + platform.height) {
+                player.position.y = platform.position.y + platform.height;
+                player.velocity.y = 0;
             }
-
-            // Update the lava collision to reset dash ability
-            for (const lava of lavaBlocks) {
-                if (player.intersects(lava)) {
-                    player.position = { ...spawnPoint };
-                    player.velocity = { x: 0, y: 0 };
-                    canDoubleJump = true;
-                    canDash = true;  // Reset dash when hitting lava
-                    break;
+            else if (player.velocity.x > 0 || (isDashing && dashTargetX > dashStartX)) {
+                player.position.x = platform.position.x - player.width;
+                if (isDashing) {
+                    isDashing = false;
+                    player.element.classList.remove('dashing');
                 }
-            }
-
-            if (goal && player.intersects(goal)) {
-                if (currentLevel < 7) {
-                    currentLevel++;
-                    createLevel(currentLevel);
-                } else {
-                    alert('Congratulations! You beat all levels!');
-                    currentLevel = 1;
-                    createLevel(currentLevel);
+                player.velocity.x = 0;
+            } else if (player.velocity.x < 0 || (isDashing && dashTargetX < dashStartX)) {
+                player.position.x = platform.position.x + platform.width;
+                if (isDashing) {
+                    isDashing = false;
+                    player.element.classList.remove('dashing');
                 }
+                player.velocity.x = 0;
             }
         }
-
-        async function completeLevel() {
-            if (currentLevel < 7) {
-                currentLevel++;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                createLevel(currentLevel);
-            } else {
-                alert('Congratulations! You beat all levels!');
-                currentLevel = 1;
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                createLevel(currentLevel);
-            }
+        if (goal && player.intersects(goal)) {
+            completeLevel();
         }
+    }
+
+    // Updated lava collision handling
+    for (const lava of lavaBlocks) {
+        if (player.intersects(lava)) {
+            // Immediately reset player state
+            player.velocity = { x: 0, y: 0 };
+            isDashing = false;
+            player.element.classList.remove('dashing');
+            
+            // Reset player abilities
+            canDoubleJump = true;
+            canDash = true;
+            
+            // Move player to spawn point
+            player.position = { ...spawnPoint };
+            
+            // Force an immediate position update
+            player.updatePosition();
+            break;
+        }
+    }
+}
+
+async function completeLevel() {
+    if (currentLevel < 7) {
+        // Store the next level number
+        const nextLevel = currentLevel + 1;
+        
+        // Immediately reset player position and state
+        player.position = { ...spawnPoint };
+        player.velocity = { x: 0, y: 0 };
+        isDashing = false;
+        player.element.classList.remove('dashing');
+        
+        // Force an immediate position update
+        player.updatePosition();
+        
+        // Small delay to ensure everything is reset
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Update current level and create the next level
+        currentLevel = nextLevel;
+        createLevel(currentLevel);
+    } else {
+        // Stop the timer and calculate final time
+        const finalTimeMs = Date.now() - startTime;
+        if (gameTimer) {
+            clearInterval(gameTimer);
+            gameTimer = null;
+        }
+        
+        // Create victory screen with final time
+        createVictoryScreen(finalTimeMs);
+    }
+}
+
+// Modify the key event listeners to start the timer
+document.addEventListener('keydown', (e) => {
+    switch(e.key) {
+        case 'ArrowLeft':
+            startGameTimer();
+            keys.left = true;
+            break;
+        case 'ArrowRight':
+            startGameTimer();
+            keys.right = true;
+            break;
+        case 'ArrowUp':
+            startGameTimer();
+            if (isOnGround) {
+                player.velocity.y = -JUMP_FORCE;
+                canDoubleJump = true;
+            } else if (canDoubleJump) {
+                player.velocity.y = -JUMP_FORCE;
+                canDoubleJump = false;
+            }
+            keys.up = true;
+            break;
+        case 'c':
+            startGameTimer();
+            if (canDash) {
+                dash();
+            }
+            break;
+    }
+});
 
         function gameLoop() {
             if (isDashing) {
