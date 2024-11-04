@@ -3,7 +3,6 @@
 <head>
     <title>Gadget Runner Game</title>
     <style>
-        /* Previous styles remain unchanged */
         body {
             margin: 0;
             overflow: hidden;
@@ -51,12 +50,61 @@
             border-radius: 3px;
         }
 
+        .lava {
+            position: absolute;
+            background: #ff4444;
+            border-radius: 3px;
+        }
+
+        .goal {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .tutorial-sign {
+            position: absolute;
+            background: none;
+            color: #333333;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 1000;
+            font-size: 32px;
+            text-align: center;
+            width: 100%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
         #hud {
             position: fixed;
             top: 10px;
             left: 10px;
             color: white;
             font-family: monospace;
+            z-index: 1000;
+        }
+
+        #level-display {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: monospace;
+            font-size: 24px;
             z-index: 1000;
         }
 
@@ -92,51 +140,22 @@
             border: 1px solid #666;
         }
 
-        .cooldown {
-            margin: 10px;
-        }
-
-        .cooldown-bar {
-            width: 100px;
-            height: 10px;
-            background: #333;
-            border: 1px solid #666;
-        }
-
-        .cooldown-progress {
-            height: 100%;
-            width: 100%;
-            background: #4CAF50;
-            transition: width 0.1s linear;
-        }
-
-        @keyframes teleportFade {
+        @keyframes dash {
             0% { opacity: 1; }
-            50% { opacity: 0; }
+            50% { opacity: 0.5; }
             100% { opacity: 1; }
         }
 
-        .teleporting {
-            animation: teleportFade 0.3s ease-in-out;
+        .dashing {
+            animation: dash 0.3s ease-in-out;
         }
     </style>
 </head>
 <body>
+    <!-- Rest of the HTML remains the same until the createLevel function -->
     <div id="game-container">
+        <div id="level-display">Level 1</div>
         <div id="hud">
-            <div class="cooldown">
-                Jetpack:
-                <div class="cooldown-bar">
-                    <div id="jetpackCooldown" class="cooldown-progress"></div>
-                </div>
-            </div>
-
-            <div class="cooldown">
-                Teleport:
-                <div class="cooldown-bar">
-                    <div id="teleportCooldown" class="cooldown-progress"></div>
-                </div>
-            </div>
         </div>
 
         <div id="controls">
@@ -151,40 +170,42 @@
             </div>
             <div class="control-item">
                 <span class="key">↑</span>
-                <span>Jump</span>
-            </div>
-            <div class="control-item">
-                <span class="key">X</span>
-                <span>Jetpack</span>
+                <span>Jump/Double Jump</span>
             </div>
             <div class="control-item">
                 <span class="key">C</span>
-                <span>Teleport</span>
+                <span>Dash</span>
             </div>
         </div>
     </div>
 
     <script>
-        // Game constants remain the same
         const GRAVITY = 0.5;
         const JUMP_FORCE = 12;
         const MOVE_SPEED = 5;
-        const TELEPORT_DISTANCE = 200;
+        const DASH_DISTANCE = 200;
 
-        // Game state
-        let jetpackFuel = 50;
-        let teleportCooldown = 0;
-        let isJetpackActive = false;
-        let canTeleport = true;
+        // Replace the global variables related to dash
+        let isDashing = false;
+        let dashStartX = 0;
+        let dashTargetX = 0;
+        let dashProgress = 0;
+        // Remove the duplicate declaration of 'canDash'
+        const DASH_DURATION = 10;
 
-        // Input state
+        let currentLevel = 1;
+        let dashCooldown = 0;
+        let canDash = true;
+        let spawnPoint = { x: 100, y: 100 };
+        let canDoubleJump = true;
+        let tutorialSigns = [];
+
         const keys = {
             left: false,
             right: false,
             up: false
         };
 
-        // GameObject class and platform creation remain the same
         class GameObject {
             constructor(x, y, width, height, className) {
                 this.position = { x, y };
@@ -219,6 +240,10 @@
                 }
             }
 
+            remove() {
+                this.element.remove();
+            }
+
             intersects(other) {
                 return this.position.x < other.position.x + other.width &&
                        this.position.x + this.width > other.position.x &&
@@ -227,33 +252,176 @@
             }
         }
 
-        // Create player and platforms
+        function createTutorialSign(x, y, text) {
+            const sign = document.createElement('div');
+            sign.className = 'tutorial-sign';
+            sign.textContent = text;
+            sign.style.left = `${x}px`;
+            sign.style.top = `${y}px`;
+            sign.style.fontSize = '60px';
+            document.getElementById('game-container').appendChild(sign);
+            tutorialSigns.push(sign);
+        }
+
         const player = new GameObject(100, 100, 30, 30, 'player');
         let isOnGround = false;
+        let platforms = [];
+        let lavaBlocks = [];
+        let goal = null;
 
-        function createPlatforms() {
-            const existingPlatforms = document.querySelectorAll('.platform');
-            existingPlatforms.forEach(platform => platform.remove());
+        function createLevel(levelNumber) {
+            // Clear existing level
+            platforms.forEach(p => p.remove());
+            lavaBlocks.forEach(l => l.remove());
+            if (goal) goal.remove();
+            tutorialSigns.forEach(sign => sign.remove());
+            tutorialSigns = [];
+
+            platforms = [];
+            lavaBlocks = [];
 
             const container = document.getElementById('game-container');
             const width = container.clientWidth;
             const height = container.clientHeight;
 
-            return [
-                new GameObject(0, height - 20, width, 20, 'platform'),
-                new GameObject(width * 0.3, height * 0.7, width * 0.2, 20, 'platform'),
-                new GameObject(width * 0.1, height * 0.5, width * 0.2, 20, 'platform'),
-                new GameObject(width * 0.6, height * 0.3, width * 0.2, 20, 'platform')
-            ];
+            // Reset player position and states
+            player.position = { ...spawnPoint };
+            player.velocity = { x: 0, y: 0 };
+            canDoubleJump = true;
+            canDash = true;
+
+            switch(levelNumber) {
+                case 1:
+                    spawnPoint = { x: 50, y: height - 100 };
+                    platforms = [
+                        new GameObject(0, height - 20, width, 20, 'platform')
+                    ];
+                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
+                    createTutorialSign(width/2, height/2, "Use ← → to move");
+                    createTutorialSign(width/2, height/2 + 50, "Press ↑ to jump");
+                    createTutorialSign(width/2, height/2 + 100, "Reach the green circle!");
+                    break;
+
+                case 2:
+                spawnPoint = { x: 50, y: height - 100 };
+                    platforms = [
+                        new GameObject(0, height - 20, width * 0.3, 20, 'platform'),
+                        new GameObject(width * 0.5, height - 20, width * 0.5, 20, 'platform')
+                    ];
+                    lavaBlocks = [
+                        new GameObject(width * 0.3, height - 20, width * 0.2, 20, 'lava')
+                    ];
+                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
+                    createTutorialSign(width/2, height/2, "Avoid the red lava!"); // Centered text
+                    break;
+
+                case 3:
+                    spawnPoint = { x: 50, y: height - 100 };
+                    platforms = [
+                        new GameObject(0, height - 20, width * 0.2, 20, 'platform'),
+                        new GameObject(width * 0.5, height - 20, width * 0.2, 20, 'platform'),
+                        new GameObject(width * 0.8, height - 20, width * 0.2, 20, 'platform')
+                    ];
+                    lavaBlocks = [
+                        new GameObject(width * 0.2, height - 20, width * 0.3, 20, 'lava'),
+                        new GameObject(width * 0.7, height - 20, width * 0.1, 20, 'lava')
+                    ];
+                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
+                    createTutorialSign(width/2, height/2, "Press C to dash!");
+                    break;
+
+                case 4:
+                    spawnPoint = { x: 50, y: height - 100 };
+                    platforms = [
+                        new GameObject(0, height - 20, width * 0.3, 20, 'platform'),
+                        new GameObject(width * 0.7, height - 20, width * 0.3, 20, 'platform')
+                    ];
+                    lavaBlocks = [
+                        new GameObject(width * 0.3, height - 20, width * 0.4, 20, 'lava')
+                    ];
+                    goal = new GameObject(width - 100, height - 70, 30, 30, 'goal');
+                    createTutorialSign(width/2, height/2, "Press ↑ twice for double jump!");
+                    break;
+                    
+
+                case 5: // Vertical Challenge
+                    spawnPoint = { x: 50, y: height - 100 };
+                    platforms = [
+                        new GameObject(0, height - 20, width * 0.2, 20, 'platform'),
+                        new GameObject(width * 0.4, height * 0.75, width * 0.2, 20, 'platform'),
+                        new GameObject(width * 0.1, height * 0.45, width * 0.2, 20, 'platform'),
+                        new GameObject(width * 0.6, height * 0.2, width * 0.2, 20, 'platform')
+                    ];
+                    lavaBlocks = [
+                        new GameObject(0, height - 20, width, 20, 'lava')
+                    ];
+                    platforms[0].element.style.zIndex = "1";
+                    goal = new GameObject(width - 100, height * 0.2 - 50, 30, 30, 'goal');
+                    break;
+
+                    case 6:
+                    spawnPoint = { x: 50, y: height - 100 };
+                    platforms = [
+                        new GameObject(0, height - 20, width * 0.15, 20, 'platform'),
+                        new GameObject(width * 0.25, height - 20, width * 0.15, 20, 'platform'),
+                        new GameObject(width * 0.5, height - 20, width * 0.15, 20, 'platform'),
+                        new GameObject(width * 0.75, height - 20, width * 0.15, 20, 'platform'),
+                        new GameObject(width * 0.3, height * 0.7, width * 0.15, 20, 'platform'),  // Lowered from 0.6 to 0.7
+                        new GameObject(width * 0.6, height * 0.5, width * 0.15, 20, 'platform')   // Lowered from 0.4 to 0.5
+                    ];
+                    lavaBlocks = [
+                        new GameObject(width * 0.15, height - 20, width * 0.1, 20, 'lava'),
+                        new GameObject(width * 0.4, height - 20, width * 0.1, 20, 'lava'),
+                        new GameObject(width * 0.65, height - 20, width * 0.1, 20, 'lava'),
+                        new GameObject(width * 0.9, height - 20, width * 0.1, 20, 'lava')
+                    ];
+                    goal = new GameObject(width - 100, height * 0.5 - 50, 30, 30, 'goal'); // Adjusted goal height to match new platform
+                    break;
+
+                case 7: // Final Challenge
+                    spawnPoint = { x: 50, y: height - 100 };
+                    platforms = [
+                        new GameObject(0, height - 20, width * 0.1, 20, 'platform'),
+                        new GameObject(width * 0.2, height * 0.8, width * 0.1, 20, 'platform'),
+                        new GameObject(width * 0.4, height * 0.6, width * 0.1, 20, 'platform'),
+                        new GameObject(width * 0.57, height * 0.52, width * 0.3, 20, 'platform'),
+                        new GameObject(width * 0.6, height * 0.4, width * 0.1, 20, 'platform'),
+                        new GameObject(width * 0.8, height * 0.22, width * 0.1, 20, 'platform')
+                    ];
+                    lavaBlocks = [
+                        new GameObject(0, height - 20, width, 20, 'lava'),
+                        new GameObject(width * 0.35, height * 0.7, width * 0.45, 20, 'lava'),
+                        new GameObject(width * 0.2, height * 0.4, width * 0.6, 20, 'lava')
+                    ];
+                    platforms[0].element.style.zIndex = "1";
+                    goal = new GameObject(width - 100, height * 0.2 - 50, 30, 30, 'goal');
+                    createTutorialSign(width/2, height/4, "Final challenge!");
+                    break;
+            }
+
+            document.getElementById('level-display').textContent = `Level ${levelNumber}`;
+            player.position = { ...spawnPoint };
         }
 
-        let platforms = createPlatforms();
+        // Update the dash function to remove cooldown logic
+function dash() {
+    if (!canDash || isDashing) return;
+    
+    dashStartX = player.position.x;
+    const direction = player.facingRight ? 1 : -1;
+    dashTargetX = dashStartX + (DASH_DISTANCE * direction);
+    
+    isDashing = true;
+    dashProgress = 0;
+    player.element.classList.add('dashing');
+    canDash = false;  // Will be reset when touching ground
+}
 
-        window.addEventListener('resize', () => {
-            platforms = createPlatforms();
-        });
+        function updateDashUI() {
+            const dashBar = document.getElementById('dashCooldown');
+            dashBar.style.width = `${((DASH_COOLDOWN - dashCooldown) / DASH_COOLDOWN) * 100}%`;
+        }
 
-        // Updated input handling with simplified controls
         document.addEventListener('keydown', (e) => {
             switch(e.key) {
                 case 'ArrowLeft':
@@ -265,17 +433,16 @@
                 case 'ArrowUp':
                     if (isOnGround) {
                         player.velocity.y = -JUMP_FORCE;
+                        canDoubleJump = true;
+                    } else if (canDoubleJump) {
+                        player.velocity.y = -JUMP_FORCE;
+                        canDoubleJump = false;
                     }
                     keys.up = true;
                     break;
-                case 'x':
-                    if (jetpackFuel > 0) {
-                        activateJetpack();
-                    }
-                    break;
                 case 'c':
-                    if (canTeleport) {
-                        teleport();
+                    if (canDash) {
+                        dash();
                     }
                     break;
             }
@@ -292,66 +459,80 @@
                 case 'ArrowUp':
                     keys.up = false;
                     break;
-                case 'x':
-                    deactivateJetpack();
-                    break;
             }
         });
 
-        // Rest of the functions remain the same
-        function activateJetpack() {
-            isJetpackActive = true;
-        }
-
-        function deactivateJetpack() {
-            isJetpackActive = false;
-        }
-
-        function teleport() {
-            if (!canTeleport) return;
-            
-            const currentXVelocity = player.velocity.x; // Only preserve x velocity
-            player.velocity.x = 0;
-            player.velocity.y = 0;
-            player.element.classList.add('teleporting');
-            
-            setTimeout(() => {
-                const teleportOffset = player.facingRight ? TELEPORT_DISTANCE : -TELEPORT_DISTANCE;
-                player.position.x += teleportOffset;
-                
-                setTimeout(() => {
-                    player.element.classList.remove('teleporting');
-                    player.velocity.x = currentXVelocity; // Restore only x velocity
-                    player.velocity.y = 0; // Keep y velocity at 0
-                }, 150);
-                
-                canTeleport = false;
-                teleportCooldown = 75;
-                
-                const cooldownInterval = setInterval(() => {
-                    if (teleportCooldown > 0) {
-                        teleportCooldown -= 1;
-                        updateTeleportUI();
-                    } else {
-                        canTeleport = true;
-                        clearInterval(cooldownInterval);
+        function checkCollisions() {
+            isOnGround = false;
+            for (const platform of platforms) {
+                if (player.intersects(platform)) {
+                    if (player.velocity.y > 0 && 
+                        player.position.y + player.height - player.velocity.y <= platform.position.y) {
+                        player.position.y = platform.position.y - player.height;
+                        player.velocity.y = 0;
+                        isOnGround = true;
+                        canDoubleJump = true;
+                        canDash = true;  // Reset dash when touching ground
+                    } else if (player.velocity.y < 0 && 
+                            player.position.y - player.velocity.y >= platform.position.y + platform.height) {
+                        player.position.y = platform.position.y + platform.height;
+                        player.velocity.y = 0;
                     }
-                }, 50);
-            }, 150);
-        }
+                    else if (player.velocity.x > 0 || (isDashing && dashTargetX > dashStartX)) {
+                        player.position.x = platform.position.x - player.width;
+                        if (isDashing) {
+                            isDashing = false;
+                            player.element.classList.remove('dashing');
+                        }
+                        player.velocity.x = 0;
+                    } else if (player.velocity.x < 0 || (isDashing && dashTargetX < dashStartX)) {
+                        player.position.x = platform.position.x + platform.width;
+                        if (isDashing) {
+                            isDashing = false;
+                            player.element.classList.remove('dashing');
+                        }
+                        player.velocity.x = 0;
+                    }
+                }
+            }
 
-        function updateJetpackUI() {
-            const jetpackBar = document.getElementById('jetpackCooldown');
-            jetpackBar.style.width = `${jetpackFuel}%`;
-        }
+            // Update the lava collision to reset dash ability
+            for (const lava of lavaBlocks) {
+                if (player.intersects(lava)) {
+                    player.position = { ...spawnPoint };
+                    player.velocity = { x: 0, y: 0 };
+                    canDoubleJump = true;
+                    canDash = true;  // Reset dash when hitting lava
+                    break;
+                }
+            }
 
-        function updateTeleportUI() {
-            const teleportBar = document.getElementById('teleportCooldown');
-            teleportBar.style.width = `${100 - teleportCooldown}%`;
+            if (goal && player.intersects(goal)) {
+                if (currentLevel < 7) {
+                    currentLevel++;
+                    createLevel(currentLevel);
+                } else {
+                    alert('Congratulations! You beat all levels!');
+                    currentLevel = 1;
+                    createLevel(currentLevel);
+                }
+            }
         }
 
         function gameLoop() {
-            if (keys.left) {
+            if (isDashing) {
+                dashProgress++;
+                
+                const t = dashProgress / DASH_DURATION;
+                const easeOut = 1 - Math.pow(1 - t, 2);
+                player.position.x = dashStartX + (dashTargetX - dashStartX) * easeOut;
+                
+                if (dashProgress >= DASH_DURATION) {
+                    isDashing = false;
+                    player.element.classList.remove('dashing');
+                }
+            } 
+            else if (keys.left) {
                 player.velocity.x = -MOVE_SPEED;
                 player.setDirection(false);
             } else if (keys.right) {
@@ -361,64 +542,46 @@
                 player.velocity.x = 0;
             }
 
-            if (isJetpackActive && jetpackFuel > 0) {
-                if (player.velocity.y < -7.5) {
-                    player.velocity.y -= 0.2;
-                }
-                else {
-                    player.velocity.y -= 0.7;
-                }
-                jetpackFuel = Math.max(0, jetpackFuel - 1);
-                updateJetpackUI();
-            }
-
-            if (!isJetpackActive && jetpackFuel < 100) {
-                jetpackFuel = Math.min(100, jetpackFuel + 0.5);
-                updateJetpackUI();
-            }
-
             player.velocity.y += GRAVITY;
 
-            player.position.x += player.velocity.x;
+            if (!isDashing) {
+                player.position.x += player.velocity.x;
+            }
             player.position.y += player.velocity.y;
 
-            isOnGround = false;
-            for (const platform of platforms) {
-                if (player.intersects(platform)) {
-                    if (player.velocity.y > 0 && 
-                        player.position.y + player.height - player.velocity.y <= platform.position.y) {
-                        player.position.y = platform.position.y - player.height;
-                        player.velocity.y = 0;
-                        isOnGround = true;
-                    } else if (player.velocity.y < 0 && 
-                             player.position.y - player.velocity.y >= platform.position.y + platform.height) {
-                        player.position.y = platform.position.y + platform.height;
-                        player.velocity.y = 0;
-                    }
-                }
-            }
+            checkCollisions();
 
             const container = document.getElementById('game-container');
-            if (player.position.x < 0) player.position.x = 0;
+            if (player.position.x < 0) {
+                player.position.x = 0;
+                if (isDashing) {
+                    isDashing = false;
+                    player.element.classList.remove('dashing');
+                }
+            }
             if (player.position.x + player.width > container.clientWidth) {
                 player.position.x = container.clientWidth - player.width;
+                if (isDashing) {
+                    isDashing = false;
+                    player.element.classList.remove('dashing');
+                }
             }
             if (player.position.y < 0) player.position.y = 0;
             if (player.position.y + player.height > container.clientHeight) {
                 player.position.y = container.clientHeight - player.height;
                 player.velocity.y = 0;
                 isOnGround = true;
+                canDoubleJump = true;
+                canDash = true;  // Reset dash when hitting the floor
             }
 
             player.updatePosition();
-
             requestAnimationFrame(gameLoop);
         }
 
-        // Start the game
+        createLevel(currentLevel);
         gameLoop();
-        updateJetpackUI();
-        updateTeleportUI();
+        updateDashUI();
     </script>
 </body>
 </html>
