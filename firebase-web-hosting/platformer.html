@@ -151,47 +151,260 @@
         .dashing {
             animation: dash 0.3s ease-in-out;
         }
+
+        #leaderboard-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-family: monospace;
+            min-width: 400px;
+            display: none;
+            z-index: 1001;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        .place {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .gold { color: #FFD700; }
+        .silver { color: #C0C0C0; }
+        .bronze { color: #CD7F32; }
+
+        #username-prompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-family: monospace;
+            text-align: center;
+            z-index: 1002;
+            display: none;
+        }
+
+        .input-field {
+            margin: 10px 0;
+            padding: 8px;
+            width: 200px;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        .button:hover {
+            background: #45a049;
+        }
+
+        #quotaMessage {
+            color: #ff4444;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 68, 68, 0.1);
+            border-radius: 5px;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <!-- Rest of the HTML remains the same until the createLevel function -->
     <div id="game-container">
         <div id="level-display">Level 1</div>
-        <div id="hud">
-        </div>
-
-        <div id="game-container">
-            <div id="level-display">Level 1</div>
-            <div id="timer-display" style="position: fixed; top: 40px; left: 50%; transform: translateX(-50%); color: white; font-family: monospace; font-size: 24px; z-index: 1000;">Time: 00:00.00</div>
-            <div id="hud"></div>
-            <div id="controls">
-                <div class="controls-title">CONTROLS</div>
-                <div class="control-item">
-                    <span class="key">←</span>
-                    <span>Move Left</span>
-                </div>
-                <div class="control-item">
-                    <span class="key">→</span>
-                    <span>Move Right</span>
-                </div>
-                <div class="control-item">
-                    <span class="key">↑</span>
-                    <span>Jump/Double Jump</span>
-                </div>
-                <div class="control-item">
-                    <span class="key">C</span>
-                    <span>Dash</span>
-                </div>
+        <div id="timer-display" style="position: fixed; top: 40px; left: 50%; transform: translateX(-50%); color: white; font-family: monospace; font-size: 24px; z-index: 1000;">Time: 00:00.00</div>
+        <div id="hud"></div>
+        <div id="controls">
+            <div class="controls-title">CONTROLS</div>
+            <div class="control-item">
+                <span class="key">←</span>
+                <span>Move Left</span>
+            </div>
+            <div class="control-item">
+                <span class="key">→</span>
+                <span>Move Right</span>
+            </div>
+            <div class="control-item">
+                <span class="key">↑</span>
+                <span>Jump/Double Jump</span>
+            </div>
+            <div class="control-item">
+                <span class="key">C</span>
+                <span>Dash</span>
             </div>
         </div>
+    </div>
+
+    <div id="username-prompt">
+        <h2>Enter Your Username</h2>
+        <input type="text" id="username-input" class="input-field" maxlength="20" placeholder="Username">
+        <button id="username-submit" class="button">Submit</button>
+    </div>
+
+    <div id="leaderboard-container">
+        <h2 style="text-align: center;">Top 10 Times</h2>
+        <div id="quotaMessage">Database quota reached. Your time was recorded locally.</div>
+        <div id="leaderboard-entries"></div>
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="play-again" class="button">Play Again</button>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 
     <script>
+        // Store original HTML for reset
+        const originalHtml = document.getElementById('game-container').innerHTML;
+
+        // Initialize Firebase with compat version
+        const firebaseConfig = {
+        apiKey: "AIzaSyCKGX_pK2c0-XqFss9yxVmGUQOOk49IVC4",
+        authDomain: "personalwebsite-chance.firebaseapp.com",
+        projectId: "personalwebsite-chance",
+        storageBucket: "personalwebsite-chance.appspot.com",
+        messagingSenderId: "968150134907",
+        appId: "1:968150134907:web:b728c3aa41c92e929432de"
+    };
+
+    // Initialize Firebase with compat version
+    firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+// Change the collection name to be specific to this game
+const leaderboardRef = db.collection('platformer-speedrun-leaderboard');
+
+        // Get or prompt for username
+        // Remove the duplicate declaration of 'username'
+
+        async function showLeaderboard(currentTime) {
+    const leaderboardContainer = document.getElementById('leaderboard-container');
+    const leaderboardEntries = document.getElementById('leaderboard-entries');
+    const quotaMessage = document.getElementById('quotaMessage');
+
+    leaderboardContainer.style.display = 'block';
+    leaderboardEntries.innerHTML = '<div style="text-align: center;">Loading leaderboard...</div>';
+    quotaMessage.style.display = 'none';
+
+    try {
+        const querySnapshot = await leaderboardRef
+            .orderBy('time')
+            .limit(30)
+            .get();
+        
+        // Rest of the showLeaderboard function remains the same...
+    } catch (error) {
+        console.error("Error fetching leaderboard:", error);
+        if (error.code === 'permission-denied') {
+            leaderboardEntries.innerHTML = '<div style="text-align: center;">Unable to load leaderboard due to permission settings</div>';
+        } else if (error.code === 'resource-exhausted' || 
+                  error.message.includes('quota') || 
+                  error.message.includes('429')) {
+            quotaMessage.style.display = 'block';
+            leaderboardEntries.innerHTML = '<div style="text-align: center;">Leaderboard temporarily unavailable</div>';
+        } else {
+            leaderboardEntries.innerHTML = '<div style="text-align: center;">Error loading leaderboard</div>';
+        }
+    }
+}
+
+async function submitScore(time) {
+    try {
+        const scoreData = {
+            username: username || 'Anonymous',
+            time: Number(time),
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        // Store locally first
+        let localScores = JSON.parse(localStorage.getItem('platformerScores') || '[]');
+        localScores.push({
+            ...scoreData,
+            timestamp: new Date().toISOString()
+        });
+        localScores.sort((a, b) => a.time - b.time);
+        localStorage.setItem('platformerScores', JSON.stringify(localScores));
+
+        // Try to submit to Firebase
+        await leaderboardRef.add(scoreData);
+        await showLeaderboard(time);
+    } catch (error) {
+        console.error("Error submitting score:", error);
+        // Show local scores if Firebase fails
+        showLocalLeaderboard(time);
+    }
+}
+
+function showLocalLeaderboard(currentTime) {
+    const leaderboardContainer = document.getElementById('leaderboard-container');
+    const leaderboardEntries = document.getElementById('leaderboard-entries');
+    const quotaMessage = document.getElementById('quotaMessage');
+
+    leaderboardContainer.style.display = 'block';
+    quotaMessage.style.display = 'block';
+
+    // Get and sort local scores
+    const localScores = JSON.parse(localStorage.getItem('platformerScores') || '[]');
+    localScores.sort((a, b) => a.time - b.time);
+
+    // Display local scores
+    leaderboardEntries.innerHTML = localScores
+        .slice(0, 10)
+        .map((score, index) => `
+            <div class="leaderboard-entry">
+                <span class="place ${index < 3 ? ['gold', 'silver', 'bronze'][index] : ''}">${index + 1}</span>
+                <span>${score.username}</span>
+                <span>${formatTime(score.time)}</span>
+            </div>
+        `)
+        .join('');
+}
+
+        // Add play again functionality
+        document.getElementById('play-again').addEventListener('click', () => {
+            document.getElementById('leaderboard-container').style.display = 'none';
+            const container = document.getElementById('game-container');
+            container.innerHTML = originalHtml;
+            hasGameStarted = false;
+            startTime = null;
+            currentLevel = 1;
+            createLevel(1);
+            gameLoop();
+        });
+
+
+        let username = localStorage.getItem('platformerUsername');
+
         const GRAVITY = 0.5;
         const JUMP_FORCE = 12;
         const MOVE_SPEED = 5;
         const DASH_DISTANCE = 200;
+        const DASH_DURATION = 10;
 
-        // Replace the global variables related to dash
         let isDashing = false;
         let dashStartX = 0;
         let dashTargetX = 0;
@@ -200,15 +413,16 @@
         let startTime = null;
         let hasGameStarted = false;
         let finalTime = null;
-        // Remove the duplicate declaration of 'canDash'
-        const DASH_DURATION = 10;
-
         let currentLevel = 1;
-        let dashCooldown = 0;
         let canDash = true;
         let spawnPoint = { x: 100, y: 100 };
         let canDoubleJump = true;
         let tutorialSigns = [];
+        // Remove the duplicate declaration of 'player'
+        // Remove the duplicate declaration of 'isOnGround'
+        // Remove the duplicate declaration of 'platforms'
+        // Remove the duplicate declaration of 'lavaBlocks'
+        // Remove the duplicate declaration of 'goal'
 
         const keys = {
             left: false,
@@ -262,6 +476,29 @@
             }
         }
 
+        function initializeGame() {
+            // Clear any existing game objects
+            if (player) player.remove();
+            platforms.forEach(p => p.remove());
+            lavaBlocks.forEach(l => l.remove());
+            if (goal) goal.remove();
+            tutorialSigns.forEach(s => s.remove());
+
+            // Reset arrays
+            platforms = [];
+            lavaBlocks = [];
+            tutorialSigns = [];
+
+            // Create new player
+            player = new GameObject(100, 100, 30, 30, 'player');
+            
+            // Create first level
+            createLevel(1);
+            
+            // Start game loop
+            gameLoop();
+        }
+
         // Add this new function to handle game start
 function startGameTimer() {
     if (!hasGameStarted) {
@@ -292,74 +529,35 @@ function updateTimer() {
     }
 }
 
-// Add this function to create the victory screen
+// Make sure createVictoryScreen properly integrates with the leaderboard
 function createVictoryScreen(finalTimeMs) {
-    // Clear the game container
-    const container = document.getElementById('game-container');
-    container.innerHTML = '';
+            if (!username) {
+                const usernamePrompt = document.getElementById('username-prompt');
+                const usernameInput = document.getElementById('username-input');
+                const usernameSubmit = document.getElementById('username-submit');
 
-    // Create and style the victory screen
-    const victoryScreen = document.createElement('div');
-    victoryScreen.style.position = 'absolute';
-    victoryScreen.style.top = '50%';
-    victoryScreen.style.left = '50%';
-    victoryScreen.style.transform = 'translate(-50%, -50%)';
-    victoryScreen.style.textAlign = 'center';
-    victoryScreen.style.color = 'white';
-    victoryScreen.style.fontFamily = 'monospace';
-    victoryScreen.style.fontSize = '24px';
+                usernamePrompt.style.display = 'block';
+                usernameInput.focus();
 
-    // Add victory text and time
-    const victoryText = document.createElement('h1');
-    victoryText.textContent = 'Congratulations!';
-    victoryText.style.color = '#4CAF50';
-    victoryText.style.fontSize = '48px';
-    victoryText.style.marginBottom = '20px';
-
-    const timeText = document.createElement('p');
-    timeText.textContent = `Final Time: ${formatTime(finalTimeMs)}`;
-    timeText.style.fontSize = '36px';
-    timeText.style.marginBottom = '40px';
-
-    const restartButton = document.createElement('button');
-    restartButton.textContent = 'Play Again';
-    restartButton.style.padding = '15px 30px';
-    restartButton.style.fontSize = '20px';
-    restartButton.style.backgroundColor = '#4CAF50';
-    restartButton.style.border = 'none';
-    restartButton.style.borderRadius = '5px';
-    restartButton.style.color = 'white';
-    restartButton.style.cursor = 'pointer';
-    restartButton.onmouseover = () => restartButton.style.backgroundColor = '#45a049';
-    restartButton.onmouseout = () => restartButton.style.backgroundColor = '#4CAF50';
-    
-    restartButton.onclick = () => {
-        // Reset all game states
-        hasGameStarted = false;
-        startTime = null;
-        if (gameTimer) {
-            clearInterval(gameTimer);
-            gameTimer = null;
+                usernameSubmit.onclick = () => {
+                    username = usernameInput.value.trim() || 'Anonymous';
+                    localStorage.setItem('platformerUsername', username);
+                    usernamePrompt.style.display = 'none';
+                    submitScore(finalTimeMs);
+                };
+            } else {
+                submitScore(finalTimeMs);
+            }
         }
-        currentLevel = 1;
-        container.innerHTML = originalHtml; // We'll define this variable below
-        createLevel(1);
-        gameLoop();
-    };
 
-    victoryScreen.appendChild(victoryText);
-    victoryScreen.appendChild(timeText);
-    victoryScreen.appendChild(restartButton);
-    container.appendChild(victoryScreen);
-}
-
+        // All other functions remain the same but moved after GameObject class definition
         function createTutorialSign(x, y, text) {
             const sign = document.createElement('div');
             sign.className = 'tutorial-sign';
             sign.textContent = text;
             sign.style.left = `${x}px`;
             sign.style.top = `${y}px`;
-            sign.style.fontSize = '60px';
+            sign.style.fontSize = '32px';
             document.getElementById('game-container').appendChild(sign);
             tutorialSigns.push(sign);
         }
@@ -640,18 +838,23 @@ async function completeLevel() {
         currentLevel = nextLevel;
         createLevel(currentLevel);
     } else {
-        // Stop the timer and calculate final time
-        const finalTimeMs = Date.now() - startTime;
+        // Stop the timer immediately when reaching the goal in the final level
         if (gameTimer) {
             clearInterval(gameTimer);
             gameTimer = null;
         }
+        // Calculate final time right when reaching the goal
+        finalTime = Date.now() - startTime;
         
-        // Create victory screen with final time
-        createVictoryScreen(finalTimeMs);
+        // Reset states
+        player.velocity = { x: 0, y: 0 };
+        isDashing = false;
+        player.element.classList.remove('dashing');
+        
+        // Create victory screen with the captured final time
+        createVictoryScreen(finalTime);
     }
 }
-
 // Modify the key event listeners to start the timer
 document.addEventListener('keydown', (e) => {
     switch(e.key) {
@@ -743,6 +946,7 @@ document.addEventListener('keydown', (e) => {
             requestAnimationFrame(gameLoop);
         }
 
+        
         createLevel(currentLevel);
         gameLoop();
         updateDashUI();
