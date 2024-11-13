@@ -251,6 +251,10 @@
                 <span class="key">C</span>
                 <span>Dash</span>
             </div>
+            <div class="control-item">
+                <span class="key">R</span>
+                <span>Restart Game</span>
+            </div>
         </div>
     </div>
 
@@ -661,6 +665,22 @@
             }
         }
 
+        function restartGame() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
+            document.getElementById('leaderboard-container').style.display = 'none';
+            document.getElementById('game-container').innerHTML = originalHtml;
+            currentLevel = 1;
+            hasGameStarted = false;
+            startTime = null;
+            hasSubmittedScore = false;
+            if (gameTimer) clearInterval(gameTimer);
+            createLevel(currentLevel);
+        }
+
         function showUsernamePrompt(finalTime) {
             const prompt = document.getElementById('username-prompt');
             prompt.style.display = 'block';
@@ -680,6 +700,16 @@
             const deltaTime = Math.min((currentTime - lastTime) / 1000, MAX_DELTA_TIME);
             lastTime = currentTime;
             accumulatedTime += deltaTime;
+
+            // Start timer on first input (now including dash)
+            if (!hasGameStarted && (keys.left || keys.right || keys.up || isDashing)) {
+                hasGameStarted = true;
+                startTime = Date.now();
+                gameTimer = setInterval(() => {
+                    const currentTime = Date.now() - startTime;
+                    document.getElementById('timer-display').textContent = `Time: ${formatTime(currentTime)}`;
+                }, 10);
+            }
 
             // Fixed timestep update
             while (accumulatedTime >= FIXED_DELTA_TIME) {
@@ -885,6 +915,10 @@
                             player.element.classList.remove('dashing');
                         }, 300);
                     }
+                    break;
+                case 'r':
+                case 'R':
+                    restartGame();
                     break;
             }
         });
