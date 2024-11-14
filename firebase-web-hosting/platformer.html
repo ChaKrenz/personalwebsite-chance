@@ -394,19 +394,41 @@
             leaderboardEntries.innerHTML = '<div style="text-align: center;">Loading leaderboard...</div>';
 
             try {
-                const querySnapshot = await leaderboardRef
-                    .orderBy('time')
-                    .limit(10)
-                    .get();
-
-                const entries = querySnapshot.docs.map((doc, index) => {
+                // Get all scores
+                const querySnapshot = await leaderboardRef.get();
+                
+                // Create a map to store the fastest time for each username
+                const userBestTimes = new Map();
+                
+                querySnapshot.docs.forEach(doc => {
                     const data = doc.data();
-                    const isCurrentScore = data.time === currentTime;
+                    const currentBestTime = userBestTimes.get(data.username);
+                    
+                    // Update the map only if this is a better time or first time for the user
+                    if (!currentBestTime || data.time < currentBestTime.time) {
+                        userBestTimes.set(data.username, {
+                            time: data.time,
+                            timestamp: data.timestamp
+                        });
+                    }
+                });
+                
+                // Convert map to array and sort by time
+                const sortedEntries = Array.from(userBestTimes.entries())
+                    .map(([username, data]) => ({
+                        username,
+                        time: data.time
+                    }))
+                    .sort((a, b) => a.time - b.time)
+                    .slice(0, 10); // Take top 10
+
+                const entries = sortedEntries.map((entry, index) => {
+                    const isCurrentScore = entry.time === currentTime && entry.username === username;
                     return `
                         <div class="leaderboard-entry ${isCurrentScore ? 'current-score' : ''}">
                             <span class="place ${index < 3 ? ['gold', 'silver', 'bronze'][index] : ''}">${index + 1}</span>
-                            <span>${data.username}</span>
-                            <span>${formatTime(data.time)}</span>
+                            <span>${entry.username}</span>
+                            <span>${formatTime(entry.time)}</span>
                         </div>
                     `;
                 }).join('');
@@ -436,7 +458,7 @@
 
         async function submitScoreOnce(time) {
             if (hasSubmittedScore) {
-                // If already submitted, just show the leaderboard
+                // If already submitted in this session, just show the leaderboard
                 showLeaderboard(time);
                 return;
             }
@@ -445,14 +467,42 @@
                 showUsernamePrompt(time);
             } else {
                 try {
-                    const scoreData = {
-                        username: username,
-                        time: Number(time),
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                    };
+                    // Get all existing scores for this username
+                    const userScores = await leaderboardRef
+                        .where('username', '==', username)
+                        .get();
 
-                    await leaderboardRef.add(scoreData);
-                    hasSubmittedScore = true;  // Mark as submitted
+                    let shouldSubmit = true;
+                    let oldScoreRef = null;
+
+                    // Check if this is a better score
+                    userScores.forEach(doc => {
+                        const existingScore = doc.data();
+                        if (existingScore.time <= time) {
+                            shouldSubmit = false;
+                        } else {
+                            // Store reference to delete the old score
+                            oldScoreRef = doc.ref;
+                        }
+                    });
+
+                    if (shouldSubmit) {
+                        // If there's an old score, delete it
+                        if (oldScoreRef) {
+                            await oldScoreRef.delete();
+                        }
+
+                        // Submit the new score
+                        const scoreData = {
+                            username: username,
+                            time: Number(time),
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+
+                        await leaderboardRef.add(scoreData);
+                    }
+
+                    hasSubmittedScore = true;  // Mark as submitted for this session
                     await showLeaderboard(time);
                 } catch (error) {
                     console.error("Error submitting score:", error);
