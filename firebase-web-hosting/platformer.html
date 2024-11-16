@@ -236,19 +236,19 @@
         <div id="controls">
             <div class="controls-title">CONTROLS</div>
             <div class="control-item">
-                <span class="key">←</span>
+                <span class="key">← / A</span>
                 <span>Move Left</span>
             </div>
             <div class="control-item">
-                <span class="key">→</span>
+                <span class="key">→ / D</span>
                 <span>Move Right</span>
             </div>
             <div class="control-item">
-                <span class="key">↑</span>
+                <span class="key">↑ / W</span>
                 <span>Jump/Double Jump</span>
             </div>
             <div class="control-item">
-                <span class="key">C</span>
+                <span class="key">C / M</span>
                 <span>Dash</span>
             </div>
             <div class="control-item">
@@ -937,14 +937,18 @@
 
         // Event Listeners
         document.addEventListener('keydown', (e) => {
-            switch(e.key) {
-                case 'ArrowLeft':
+            switch(e.key.toLowerCase()) {  // Convert to lowercase for case-insensitive matching
+                case 'arrowleft':
+                case 'a':
                     keys.left = true;
                     break;
-                case 'ArrowRight':
+                case 'arrowright':
+                case 'd':
                     keys.right = true;
                     break;
-                case 'ArrowUp':
+                case 'arrowup':
+                case 'w':
+                case ' ':  // Also allow spacebar for jumping
                     if (isOnGround) {
                         player.velocity.y = -JUMP_FORCE;
                     } else if (canDoubleJump) {
@@ -953,7 +957,7 @@
                     }
                     break;
                 case 'c':
-                case 'C':
+                case 'm':
                     if (!isDashing && canDash && player) {
                         isDashing = true;
                         canDash = false;
@@ -967,18 +971,19 @@
                     }
                     break;
                 case 'r':
-                case 'R':
                     restartGame();
                     break;
             }
         });
 
         document.addEventListener('keyup', (e) => {
-            switch(e.key) {
-                case 'ArrowLeft':
+            switch(e.key.toLowerCase()) {  // Convert to lowercase for case-insensitive matching
+                case 'arrowleft':
+                case 'a':
                     keys.left = false;
                     break;
-                case 'ArrowRight':
+                case 'arrowright':
+                case 'd':
                     keys.right = false;
                     break;
             }

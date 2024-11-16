@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gadget Runner - Menu</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: monospace;
+            color: white;
+        }
+
+        .menu-container {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .menu-title {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+
+        .menu-button {
+            display: block;
+            width: 300px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .menu-button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="menu-container">
+        <div class="menu-title">PLATFORMER</div>
+        <button class="menu-button" onclick="startOriginalGame()">Originial Platformer</button>
+        <button class="menu-button" onclick="startNewGame()">Platformer Challenge</button>
+    </div>
+
+    <script>
+        function startOriginalGame() {
+            window.location.href = 'platformer.html';
+        }
+
+        function startNewGame() {
+            window.location.href = 'platformer2.html';
+        }
+    </script>
+</body>
+</html>
