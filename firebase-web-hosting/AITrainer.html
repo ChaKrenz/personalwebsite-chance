@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Training Visualization</title>
+    
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prop-types/15.8.1/prop-types.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.10.3/Recharts.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const {
+            LineChart,
+            Line,
+            XAxis,
+            YAxis,
+            CartesianGrid,
+            Tooltip,
+            Legend,
+            ResponsiveContainer
+        } = window.Recharts;
+
+        const CANVAS_WIDTH = 1200;
+        const CANVAS_HEIGHT = 800;
+        const MOVE_SPEED = 7;
+        const JUMP_FORCE = 13;
+        const GRAVITY = 0.7;
+
+        let currentLevel = 1;
+
+        let spawnPoint = { x: 100, y: 700 };
+        const platforms = [
+            { position: { x: 0, y: 750 }, width: CANVAS_WIDTH, height: 20 }
+        ];
+        const lavaBlocks = [];
+        let goal = {
+            position: { x: 1150, y: 700 },
+            width: 30,
+            height: 30
+        };
+
+
+        class GameObject {
+            constructor(x, y, width, height, type) {
+                this.position = { x, y };
+                this.width = width;
+                this.height = height;
+                this.type = type; // For example: 'platform', 'goal', or 'lava'
+            }
+        }
+
+        function createLevel(levelNumber) {
+            // Clear existing platforms and lava blocks
+            platforms.length = 0;
+            lavaBlocks.length = 0;
+
+            switch(levelNumber) {
+                case 1: // Basic movement tutorial
+                    spawnPoint = { x: 100, y: 700 };
+                    platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
+                    goal = new GameObject(1150, 700, 30, 30, 'goal');
+                    break;
+
+                case 2: // Jump tutorial
+                    spawnPoint = { x: 100, y: 700 };
+                    platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                    platforms.push(new GameObject(400, 700, 200, 20, 'platform'));
+                    platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
+                    goal = new GameObject(800, 550, 30, 30, 'goal');
+                    break;
+
+                case 3: // Double jump tutorial
+                    spawnPoint = { x: 100, y: 700 };
+                    platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                    platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
+                    goal = new GameObject(800, 550, 30, 30, 'goal');
+                    break;
+
+                case 4: // Dash tutorial
+                    spawnPoint = { x: 100, y: 700 };
+                    platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                    platforms.push(new GameObject(900, 750, 300, 20, 'platform'));
+                    lavaBlocks.push(new GameObject(300, 770, 600, 30, 'lava'));
+                    goal = new GameObject(1000, 700, 30, 30, 'goal');
+                    break;
+
+                case 5: // Combining jumps and dashes
+                    spawnPoint = { x: 50, y: 700 };
+                    platforms.push(new GameObject(0, 750, 200, 20, 'platform'));
+                    platforms.push(new GameObject(400, 650, 150, 20, 'platform'));
+                    platforms.push(new GameObject(800, 550, 150, 20, 'platform'));
+                    lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                    goal = new GameObject(850, 500, 30, 30, 'goal');
+                    break;
+
+                case 6: // Precision jumping
+                    spawnPoint = { x: 50, y: 700 };
+                    platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                    platforms.push(new GameObject(300, 650, 100, 20, 'platform'));
+                    platforms.push(new GameObject(600, 550, 100, 20, 'platform'));
+                    platforms.push(new GameObject(300, 450, 100, 20, 'platform'));
+                    platforms.push(new GameObject(600, 350, 100, 20, 'platform'));
+                    lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                    goal = new GameObject(650, 300, 30, 30, 'goal');
+                    break;
+
+                case 7: // Speed and timing
+                    spawnPoint = { x: 50, y: 700 };
+                    platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                    platforms.push(new GameObject(400, 750, 100, 20, 'platform'));
+                    platforms.push(new GameObject(800, 650, 100, 20, 'platform'));
+                    platforms.push(new GameObject(400, 550, 100, 20, 'platform'));
+                    platforms.push(new GameObject(0, 450, 100, 20, 'platform'));
+                    lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(500, 670, 300, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(100, 570, 300, 30, 'lava'));
+                    goal = new GameObject(50, 400, 30, 30, 'goal');
+                    break;
+
+                case 8: // Aerial control
+                    spawnPoint = { x: 50, y: 700 };
+                    platforms.push(new GameObject(0, 750, 100, 20, 'platform'));
+                    platforms.push(new GameObject(200, 650, 80, 20, 'platform'));
+                    platforms.push(new GameObject(400, 550, 80, 20, 'platform'));
+                    platforms.push(new GameObject(600, 450, 80, 20, 'platform'));
+                    platforms.push(new GameObject(800, 350, 80, 20, 'platform'));
+                    platforms.push(new GameObject(1000, 250, 100, 20, 'platform'));
+                    lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                    goal = new GameObject(1050, 200, 30, 30, 'goal');
+                    break;
+
+                case 9: // Complex movement
+                    spawnPoint = { x: 50, y: 700 };
+                    platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                    platforms.push(new GameObject(300, 650, 80, 20, 'platform'));
+                    platforms.push(new GameObject(600, 750, 80, 20, 'platform'));
+                    platforms.push(new GameObject(900, 650, 80, 20, 'platform'));
+                    platforms.push(new GameObject(1100, 550, 100, 20, 'platform'));
+                    lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(380, 670, 220, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(680, 670, 220, 30, 'lava'));
+                    goal = new GameObject(1150, 500, 30, 30, 'goal');
+                    break;
+
+                case 10: // Ultimate challenge
+                    spawnPoint = { x: 50, y: 700 };
+                    platforms.push(new GameObject(0, 750, 80, 20, 'platform'));
+                    platforms.push(new GameObject(200, 650, 60, 20, 'platform'));
+                    platforms.push(new GameObject(400, 550, 60, 20, 'platform'));
+                    platforms.push(new GameObject(700, 450, 60, 20, 'platform'));
+                    platforms.push(new GameObject(400, 350, 60, 20, 'platform'));
+                    platforms.push(new GameObject(100, 250, 60, 20, 'platform'));
+                    platforms.push(new GameObject(400, 150, 60, 20, 'platform'));
+                    lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(260, 670, 140, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(460, 570, 240, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(160, 470, 240, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(460, 370, 140, 30, 'lava'));
+                    lavaBlocks.push(new GameObject(160, 270, 240, 30, 'lava'));
+                    goal = new GameObject(420, 100, 30, 30, 'goal');
+                    break;
+
+                default:
+                    console.error("Level not implemented:", levelNumber);
+            }
+        }
+
+
+        // Initialize first level
+        createLevel(currentLevel);
+
+        class NeuralNetwork {
+            constructor(inputNodes, hiddenNodes, outputNodes) {
+                this.input_nodes = inputNodes;
+                this.hidden_nodes = hiddenNodes;
+                this.output_nodes = outputNodes;
+                
+                // Initialize weights for the network
+                this.weights_ih = Array(hiddenNodes).fill().map(() => 
+                    Array(inputNodes).fill().map(() => Math.random() * 2 - 1)
+                );
+                this.weights_ho = Array(outputNodes).fill().map(() => 
+                    Array(hiddenNodes).fill().map(() => Math.random() * 2 - 1)
+                );
+            }
+
+            predict(inputs) {
+                // Forward propagation
+                const hidden = this.weights_ih.map(weights =>
+                    weights.reduce((sum, weight, i) => sum + weight * inputs[i], 0)
+                ).map(x => 1 / (1 + Math.exp(-x)));
+
+                const outputs = this.weights_ho.map(weights =>
+                    weights.reduce((sum, weight, i) => sum + weight * hidden[i], 0)
+                ).map(x => 1 / (1 + Math.exp(-x)));
+
+                return outputs;
+            }
+
+            clone() {
+                const clone = new NeuralNetwork(this.input_nodes, this.hidden_nodes, this.output_nodes);
+                clone.weights_ih = this.weights_ih.map(row => [...row]);
+                clone.weights_ho = this.weights_ho.map(row => [...row]);
+                return clone;
+            }
+
+            mutate(rate) {
+                const mutateValue = x => Math.random() < rate ? x + (Math.random() * 2 - 1) : x;
+                this.weights_ih = this.weights_ih.map(row => row.map(mutateValue));
+                this.weights_ho = this.weights_ho.map(row => row.map(mutateValue));
+            }
+        }
+
+        class AIPlayer {
+            constructor(brain) {
+                // Initialize with game properties
+                this.brain = brain || new NeuralNetwork(12, 8, 4);
+                this.position = { x: spawnPoint.x, y: spawnPoint.y }; // Use x and y directly
+                this.velocity = { x: 0, y: 0 };
+                this.width = 30;
+                this.height = 30;
+                this.fitness = 0;
+                this.dead = false;
+                this.reachedGoal = false;
+                this.isOnGround = false;
+                this.canDoubleJump = true;
+                this.canDash = true;
+                this.isDashing = false;
+                this.facingRight = true;
+                this.startTime = Date.now();
+            }
+
+            think(gameState) {
+                const inputs = [
+                    this.position.x / CANVAS_WIDTH,
+                    this.position.y / CANVAS_HEIGHT,
+                    this.velocity.x / MOVE_SPEED,
+                    this.velocity.y / JUMP_FORCE,
+                    goal.position.x / CANVAS_WIDTH,
+                    goal.position.y / CANVAS_HEIGHT,
+                    this.isOnGround ? 1 : 0,
+                    this.canDoubleJump ? 1 : 0,
+                    this.canDash ? 1 : 0,
+                    this.getNearestPlatformDistance() / CANVAS_WIDTH,
+                    this.getNearestLavaDistance() / CANVAS_WIDTH,
+                    this.isDashing ? 1 : 0
+                ];
+
+                const outputs = this.brain.predict(inputs);
+                return {
+                    left: outputs[0] > 0.5,
+                    right: outputs[1] > 0.5,
+                    jump: outputs[2] > 0.5,
+                    dash: outputs[3] > 0.5
+                };
+            }
+
+            getNearestPlatformDistance() {
+                return platforms.reduce((nearest, platform) => {
+                    const dist = Math.sqrt(
+                        Math.pow(this.position.x - platform.position.x, 2) +
+                        Math.pow(this.position.y - platform.position.y, 2)
+                    );
+                    return Math.min(nearest, dist);
+                }, Infinity);
+            }
+
+            getNearestLavaDistance() {
+                return lavaBlocks.reduce((nearest, lava) => {
+                    const dist = Math.sqrt(
+                        Math.pow(this.position.x - lava.position.x, 2) +
+                        Math.pow(this.position.y - lava.position.y, 2)
+                    );
+                    return Math.min(nearest, dist);
+                }, Infinity);
+            }
+
+            calculateFitness() {
+                const distanceToGoal = Math.sqrt(
+                    Math.pow(this.position.x - goal.position.x, 2) +
+                    Math.pow(this.position.y - goal.position.y, 2)
+                );
+                
+                const timeTaken = Date.now() - this.startTime;
+                let fitness = 1 / (distanceToGoal + 1);
+                
+                if (this.reachedGoal) {
+                    fitness *= 10;
+                    fitness /= Math.sqrt(timeTaken);
+                }
+                
+                if (this.dead) {
+                    fitness *= 0.1;
+                }
+                
+                this.fitness = fitness;
+                return fitness;
+            }
+        }
+
+        class Population {
+            constructor(size) {
+                this.size = size;
+                this.players = Array(size).fill().map(() => new AIPlayer());
+                this.generation = 1;
+                this.bestPlayer = null;
+                this.bestScore = 0;
+            }
+
+            update() {
+                let allDone = true;
+                
+                this.players.forEach(player => {
+                    if (!player.dead && !player.reachedGoal) {
+                        allDone = false;
+                        const decision = player.think(this.getGameState());
+                        this.applyDecision(player, decision);
+                    }
+                });
+
+                return allDone;
+            }
+
+            getGameState() {
+                return {
+                    platforms,
+                    lavaBlocks,
+                    goal,
+                    currentLevel
+                };
+            }
+
+            calculateAverageFitness() {
+                return this.players.reduce((sum, player) => sum + player.fitness, 0) / this.players.length;
+            }
+
+            applyDecision(player, decision) {
+                // Simulate your game's physics for the AI player
+                if (decision.left) {
+                    player.velocity.x = -MOVE_SPEED;
+                    player.facingRight = false;
+                } else if (decision.right) {
+                    player.velocity.x = MOVE_SPEED;
+                    player.facingRight = true;
+                }
+
+                if (decision.jump) {
+                    if (player.isOnGround) {
+                        player.velocity.y = -JUMP_FORCE;
+                    } else if (player.canDoubleJump) {
+                        player.velocity.y = -JUMP_FORCE;
+                        player.canDoubleJump = false;
+                    }
+                }
+
+                if (decision.dash && player.canDash && !player.isDashing) {
+                    player.isDashing = true;
+                    player.canDash = false;
+                    player.velocity.x *= 2;
+                    setTimeout(() => {
+                        player.isDashing = false;
+                    }, 300);
+                }
+
+                // Apply physics
+                player.velocity.y += GRAVITY;
+                player.position.x += player.velocity.x;
+                player.position.y += player.velocity.y;
+
+                // Check collisions
+                this.handleCollisions(player);
+            }
+
+            handleCollisions(player) {
+                // Platform collisions
+                player.isOnGround = false;
+                platforms.forEach(platform => {
+                    if (this.checkCollision(player, platform)) {
+                        // Apply your game's collision resolution logic
+                        const overlapX = Math.min(
+                            Math.abs(player.position.x + player.width - platform.position.x),
+                            Math.abs(platform.position.x + platform.width - player.position.x)
+                        );
+                        const overlapY = Math.min(
+                            Math.abs(player.position.y + player.height - platform.position.y),
+                            Math.abs(platform.position.y + platform.height - player.position.y)
+                        );
+
+                        if (overlapX < overlapY) {
+                            // Horizontal collision
+                            if (player.position.x < platform.position.x) {
+                                player.position.x = platform.position.x - player.width;
+                            } else {
+                                player.position.x = platform.position.x + platform.width;
+                            }
+                            if (player.isDashing) {
+                                player.isDashing = false;
+                            }
+                        } else {
+                            // Vertical collision
+                            if (player.position.y < platform.position.y) {
+                                player.position.y = platform.position.y - player.height;
+                                player.velocity.y = 0;
+                                player.isOnGround = true;
+                                player.canDoubleJump = true;
+                                player.canDash = true;
+                            } else {
+                                player.position.y = platform.position.y + platform.height;
+                                player.velocity.y = 0;
+                            }
+                        }
+                    }
+                });
+
+                // Goal collision
+                if (this.checkCollision(player, goal)) {
+                    player.reachedGoal = true;
+                    if (player.calculateFitness() > this.bestScore) {
+                        this.bestScore = player.fitness;
+                        this.bestPlayer = player;
+                    }
+                }
+
+                // Lava collision
+                lavaBlocks.forEach(lava => {
+                    if (this.checkCollision(player, lava)) {
+                        player.dead = true;
+                    }
+                });
+
+                // Boundary checks
+                if (player.position.x < 0 || 
+                    player.position.x + player.width > 1200 || 
+                    player.position.y < 0 || 
+                    player.position.y > 800) {
+                    player.dead = true;
+                }
+            }
+
+            checkCollision(a, b) {
+                return a.position.x < b.position.x + b.width &&
+                    a.position.x + a.width > b.position.x &&
+                    a.position.y < b.position.y + b.height &&
+                    a.position.y + a.height > b.position.y;
+            }
+
+            naturalSelection() {
+                // Calculate fitness for all players
+                this.players.forEach(player => player.calculateFitness());
+                
+                // Sort by fitness
+                this.players.sort((a, b) => b.fitness - a.fitness);
+                
+                // Keep the best players
+                const bestPlayers = this.players.slice(0, this.size / 4);
+                
+                // Create new population
+                const newPlayers = [];
+                
+                while (newPlayers.length < this.size) {
+                    // Select parents from best players
+                    const parentA = bestPlayers[Math.floor(Math.random() * bestPlayers.length)];
+                    const parentB = bestPlayers[Math.floor(Math.random() * bestPlayers.length)];
+                    
+                    // Create child with crossover
+                    const child = new AIPlayer();
+                    
+                    // Crossover weights
+                    for (let i = 0; i < parentA.brain.weights_ih.length; i++) {
+                        for (let j = 0; j < parentA.brain.weights_ih[i].length; j++) {
+                            child.brain.weights_ih[i][j] = Math.random() < 0.5 ? 
+                                parentA.brain.weights_ih[i][j] : parentB.brain.weights_ih[i][j];
+                        }
+                    }
+                    
+                    for (let i = 0; i < parentA.brain.weights_ho.length; i++) {
+                        for (let j = 0; j < parentA.brain.weights_ho[i].length; j++) {
+                            child.brain.weights_ho[i][j] = Math.random() < 0.5 ? 
+                                parentA.brain.weights_ho[i][j] : parentB.brain.weights_ho[i][j];
+                        }
+                    }
+                    
+                    // Mutate
+                    child.brain.mutate(0.1);
+                    
+                    newPlayers.push(child);
+                }
+                
+                this.players = newPlayers;
+                this.generation++;
+            }
+        }
+
+        // Training system setup
+        const trainingSystem = new Population(50);
+
+        // Main training loop
+        function trainAI() {
+            if (trainingSystem.update()) {
+                console.log(`Generation ${trainingSystem.generation} complete`);
+                console.log(`Best fitness: ${trainingSystem.bestScore}`);
+                
+                if (trainingSystem.bestScore > 0.9) {
+                    console.log("Level completed! Moving to next level...");
+                    currentLevel++;
+                    createLevel(currentLevel);
+                }
+                
+                trainingSystem.naturalSelection();
+            }
+            
+            requestAnimationFrame(trainAI);
+        }
+
+        // Start training
+        trainAI();
+
+        // Training System class
+        class TrainingSystem {
+            constructor(populationSize = 50) {
+                this.population = new Population(populationSize);
+                this.currentLevel = 1;
+                this.gameState = this.createGameState(this.currentLevel);
+                this.generationStats = [];
+            }
+
+            createGameState(level) {
+                const platforms = [];
+                const lava = [];
+                let goal = { x: 1150, y: 700, width: 30, height: 30 };
+
+                platforms.push({ x: 0, y: 750, width: 1200, height: 20 });
+
+                return {
+                    platforms,
+                    lava,
+                    goal,
+                    nearestPlatform: this.findNearestPlatform({ x: 100, y: 700 }, platforms)
+                };
+            }
+
+            findNearestPlatform(position, platforms) {
+                return platforms.reduce((nearest, platform) => {
+                    const distance = Math.sqrt(
+                        Math.pow(platform.x + platform.width/2 - position.x, 2) +
+                        Math.pow(platform.y - position.y, 2)
+                    );
+                    return distance < nearest.distance ? {
+                        x: platform.x + platform.width/2,
+                        y: platform.y,
+                        distance
+                    } : nearest;
+                }, { x: 0, y: 0, distance: Infinity });
+            }
+
+            update() {
+                const allDone = this.population.update(this.gameState);
+                if (allDone) {
+                    this.population.naturalSelection();
+                    
+                    const stats = {
+                        generation: this.population.generation,
+                        bestFitness: this.population.bestScore,
+                        averageFitness: this.population.calculateAverageFitness(),
+                        level: this.currentLevel,
+                        goalReached: this.population.bestScore > 0.9
+                    };
+                    
+                    this.generationStats.push(stats);
+                    
+                    if (this.population.bestScore > 0.9) {
+                        this.currentLevel++;
+                        this.gameState = this.createGameState(this.currentLevel);
+                    }
+
+                    return stats;
+                }
+                return null;
+            }
+
+            getStats() {
+                return this.generationStats;
+            }
+
+            getBestPlayer() {
+                return this.population.bestPlayer;
+            }
+
+            reset() {
+                this.currentLevel = 1;
+                this.gameState = this.createGameState(this.currentLevel);
+                this.population = new Population(this.population.players.length);
+                this.generationStats = [];
+            }
+        }
+
+        const GameCanvas = ({ gameState, population }) => {
+            const canvasRef = React.useRef(null);
+            const animationFrameRef = React.useRef(null);
+
+            const draw = React.useCallback(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+
+                const ctx = canvas.getContext('2d');
+
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Draw platforms
+                ctx.fillStyle = '#333';
+                (gameState.platforms || []).forEach(platform => {
+                    if (platform?.position?.x != null && platform?.position?.y != null) {
+                        ctx.fillRect(
+                            platform.position.x,
+                            platform.position.y,
+                            platform.width,
+                            platform.height
+                        );
+                    }
+                });
+
+                // Draw lava
+                ctx.fillStyle = '#ff4444';
+                (gameState.lava || []).forEach(lava => {
+                    if (lava?.position?.x != null && lava?.position?.y != null) {
+                        ctx.fillRect(
+                            lava.position.x,
+                            lava.position.y,
+                            lava.width,
+                            lava.height
+                        );
+                    }
+                });
+
+                // Draw goal
+                if (gameState.goal?.position?.x != null && gameState.goal?.position?.y != null) {
+                    ctx.fillStyle = '#44ff44';
+                    ctx.fillRect(
+                        gameState.goal.position.x,
+                        gameState.goal.position.y,
+                        gameState.goal.width,
+                        gameState.goal.height
+                    );
+                }
+
+                // Draw AI players
+                population.players.forEach(player => {
+                    if (!player.dead && player.position?.x != null && player.position?.y != null) {
+                        ctx.fillStyle = player.reachedGoal ? '#44ff44' : '#4444ff';
+                        ctx.fillRect(
+                            player.position.x,
+                            player.position.y,
+                            player.width,
+                            player.height
+                        );
+                    }
+                });
+            }, [gameState, population]);
+
+
+            React.useEffect(() => {
+                const animate = () => {
+                    draw();
+                    animationFrameRef.current = requestAnimationFrame(animate);
+                };
+                
+                animate();
+                
+                return () => {
+                    if (animationFrameRef.current) {
+                        cancelAnimationFrame(animationFrameRef.current);
+                    }
+                };
+            }, [draw]);
+
+            return (
+                <canvas
+                    ref={canvasRef}
+                    width={CANVAS_WIDTH}
+                    height={CANVAS_HEIGHT}
+                    className="border border-gray-300 bg-white"
+                />
+            );
+        };
+
+        const AITrainer = () => {
+            const [generation, setGeneration] = React.useState(1);
+            const [isTraining, setIsTraining] = React.useState(false);
+            const [speed, setSpeed] = React.useState(1);
+            const [stats, setStats] = React.useState({
+                averageFitness: 0,
+                bestFitness: 0,
+                goalReached: false,
+                generation: 1
+            });
+            const [allTimeStats, setAllTimeStats] = React.useState([]);
+            const trainingSystemRef = React.useRef(new TrainingSystem(50));
+            const animationFrameRef = React.useRef(null);
+
+            const updateSimulation = React.useCallback(() => {
+                if (!isTraining) return;
+
+                for (let i = 0; i < speed; i++) {
+                    const newStats = trainingSystemRef.current.update();
+                    if (newStats) {
+                        setStats(newStats);
+                        setAllTimeStats(prev => [...prev, newStats]);
+                        setGeneration(newStats.generation);
+                    }
+                }
+                
+                animationFrameRef.current = requestAnimationFrame(updateSimulation);
+            }, [isTraining, speed]);
+
+            React.useEffect(() => {
+                if (isTraining) {
+                    updateSimulation();
+                } else if (animationFrameRef.current) {
+                    cancelAnimationFrame(animationFrameRef.current);
+                }
+
+                return () => {
+                    if (animationFrameRef.current) {
+                        cancelAnimationFrame(animationFrameRef.current);
+                    }
+                };
+            }, [isTraining, updateSimulation]);
+
+            return (
+                <div className="flex flex-col gap-8">
+                    <Card className="w-full max-w-6xl mx-auto">
+                        <CardHeader>
+                            <CardTitle>AI Training Progress - Generation {generation}</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-col gap-4">
+                                <div className="flex gap-4 items-center">
+                                    <button 
+                                        className="p-2 bg-blue-500 text-white rounded"
+                                        onClick={() => setIsTraining(!isTraining)}
+                                    >
+                                        {isTraining ? "Pause" : "Play"}
+                                    </button>
+                                    <button 
+                                        className="p-2 bg-green-500 text-white rounded"
+                                        onClick={() => setSpeed(s => Math.min(s * 2, 16))}
+                                    >
+                                        Speed Up
+                                    </button>
+                                    <span>Speed: {speed}x</span>
+                                </div>
+
+                                <div className="stats grid grid-cols-3 gap-4">
+                                    <div className="stat bg-gray-100 p-4 rounded">
+                                        <div className="text-lg">Average Fitness</div>
+                                        <div className="text-2xl">{stats.averageFitness.toFixed(4)}</div>
+                                    </div>
+                                    <div className="stat bg-gray-100 p-4 rounded">
+                                        <div className="text-lg">Best Fitness</div>
+                                        <div className="text-2xl">{stats.bestFitness.toFixed(4)}</div>
+                                    </div>
+                                    <div className="stat bg-gray-100 p-4 rounded">
+                                        <div className="text-lg">Goals Reached</div>
+                                        <div className="text-2xl">{allTimeStats.filter(s => s.goalReached).length}</div>
+                                    </div>
+                                </div>
+
+                                <GameCanvas 
+                                    gameState={trainingSystemRef.current.gameState}
+                                    population={trainingSystemRef.current.population}
+                                />
+
+                                <div style={{ width: '100%', height: 300 }}>
+                                    <ResponsiveContainer>
+                                        <LineChart data={allTimeStats}>
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis dataKey="generation" />
+                                            <YAxis />
+                                            <Tooltip />
+                                            <Legend />
+                                            <Line type="monotone" dataKey="averageFitness" stroke="#8884d8" />
+                                            <Line type="monotone" dataKey="bestFitness" stroke="#82ca9d" />
+                                        </LineChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            );
+        };
+
+        // Simple Card components remain the same
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-lg shadow ${className}`}>{children}</div>
+        );
+
+        const CardHeader = ({ children }) => (
+            <div className="p-6 border-b">{children}</div>
+        );
+
+        const CardTitle = ({ children }) => (
+            <h2 className="text-2xl font-bold">{children}</h2>
+        );
+
+        const CardContent = ({ children }) => (
+            <div className="p-6">{children}</div>
+        );
+
+        // Render the app
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AITrainer />);
+    </script>
+</body>
+</html>
