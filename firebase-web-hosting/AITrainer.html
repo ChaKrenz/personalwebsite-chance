@@ -33,6 +33,9 @@
         const JUMP_FORCE = 13;
         const GRAVITY = 0.7;
 
+        let currentLevelReached = 1;
+        const DASH_REWARD = 0.3; // Reward multiplier for dashing
+
         let currentLevel = 1;
 
         let spawnPoint = { x: 100, y: 700 };
@@ -182,24 +185,55 @@
                 this.hidden_nodes = hiddenNodes;
                 this.output_nodes = outputNodes;
                 
-                // Initialize weights for the network
+                // Add multiple hidden layers for more complex behavior learning
                 this.weights_ih = Array(hiddenNodes).fill().map(() => 
-                    Array(inputNodes).fill().map(() => Math.random() * 2 - 1)
+                    Array(inputNodes).fill().map(() => this.gaussianRandom())
+                );
+                this.weights_hh = Array(hiddenNodes).fill().map(() => 
+                    Array(hiddenNodes).fill().map(() => this.gaussianRandom())
                 );
                 this.weights_ho = Array(outputNodes).fill().map(() => 
-                    Array(hiddenNodes).fill().map(() => Math.random() * 2 - 1)
+                    Array(hiddenNodes).fill().map(() => this.gaussianRandom())
                 );
+                
+                // Add bias nodes
+                this.bias_h = Array(hiddenNodes).fill().map(() => this.gaussianRandom());
+                this.bias_o = Array(outputNodes).fill().map(() => this.gaussianRandom());
+            }
+
+            gaussianRandom(mean = 0, stdev = 1) {
+                const u = 1 - Math.random();
+                const v = Math.random();
+                const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+                return z * stdev + mean;
+            }
+
+            // Enhanced activation function using LeakyReLU
+            leakyReLU(x) {
+                return x > 0 ? x : 0.01 * x;
             }
 
             predict(inputs) {
-                // Forward propagation
-                const hidden = this.weights_ih.map(weights =>
-                    weights.reduce((sum, weight, i) => sum + weight * inputs[i], 0)
-                ).map(x => 1 / (1 + Math.exp(-x)));
-
+                // Normalize inputs
+                const normalizedInputs = inputs.map(x => x / Math.max(1, Math.abs(x)));
+                
+                // First hidden layer
+                const hidden1 = this.weights_ih.map((weights, i) =>
+                    this.leakyReLU(weights.reduce((sum, weight, j) => 
+                        sum + weight * normalizedInputs[j], 0) + this.bias_h[i])
+                );
+                
+                // Second hidden layer
+                const hidden2 = this.weights_hh.map((weights, i) =>
+                    this.leakyReLU(weights.reduce((sum, weight, j) => 
+                        sum + weight * hidden1[j], 0) + this.bias_h[i])
+                );
+                
+                // Output layer with sigmoid activation
                 const outputs = this.weights_ho.map(weights =>
-                    weights.reduce((sum, weight, i) => sum + weight * hidden[i], 0)
-                ).map(x => 1 / (1 + Math.exp(-x)));
+                    1 / (1 + Math.exp(-weights.reduce((sum, weight, i) => 
+                        sum + weight * hidden2[i], 0) + this.bias_o[this.weights_ho.indexOf(weights)]))
+                );
 
                 return outputs;
             }
@@ -207,14 +241,27 @@
             clone() {
                 const clone = new NeuralNetwork(this.input_nodes, this.hidden_nodes, this.output_nodes);
                 clone.weights_ih = this.weights_ih.map(row => [...row]);
+                clone.weights_hh = this.weights_hh.map(row => [...row]);
                 clone.weights_ho = this.weights_ho.map(row => [...row]);
+                clone.bias_h = [...this.bias_h];
+                clone.bias_o = [...this.bias_o];
                 return clone;
             }
 
             mutate(rate) {
-                const mutateValue = x => Math.random() < rate ? x + (Math.random() * 2 - 1) : x;
+                const mutateValue = x => {
+                    if (Math.random() < rate) {
+                        // Use Gaussian mutation for more natural variation
+                        return x + this.gaussianRandom(0, 0.5);
+                    }
+                    return x;
+                };
+                
                 this.weights_ih = this.weights_ih.map(row => row.map(mutateValue));
+                this.weights_hh = this.weights_hh.map(row => row.map(mutateValue));
                 this.weights_ho = this.weights_ho.map(row => row.map(mutateValue));
+                this.bias_h = this.bias_h.map(mutateValue);
+                this.bias_o = this.bias_o.map(mutateValue);
             }
         }
 
@@ -235,23 +282,48 @@
                 this.isDashing = false;
                 this.facingRight = true;
                 this.startTime = Date.now();
+                this.dashCount = 0;
+                this.stateHistory = [];
+                this.maxHistoryLength = 10;
+                this.timeOnPlatform = 0;
+                this.successfulJumps = 0;
+                this.distanceTraveled = 0;
+                this.previousPosition = { x: spawnPoint.x, y: spawnPoint.y };
             }
 
             think(gameState) {
+                // Calculate additional inputs
+                const distanceToGoal = Math.sqrt(
+                    Math.pow(this.position.x - goal.position.x, 2) +
+                    Math.pow(this.position.y - goal.position.y, 2)
+                );
+                
+                const verticalDistanceToGoal = goal.position.y - this.position.y;
+                const horizontalDistanceToGoal = goal.position.x - this.position.x;
+                
                 const inputs = [
                     this.position.x / CANVAS_WIDTH,
                     this.position.y / CANVAS_HEIGHT,
                     this.velocity.x / MOVE_SPEED,
                     this.velocity.y / JUMP_FORCE,
-                    goal.position.x / CANVAS_WIDTH,
-                    goal.position.y / CANVAS_HEIGHT,
+                    horizontalDistanceToGoal / CANVAS_WIDTH,
+                    verticalDistanceToGoal / CANVAS_HEIGHT,
                     this.isOnGround ? 1 : 0,
                     this.canDoubleJump ? 1 : 0,
                     this.canDash ? 1 : 0,
                     this.getNearestPlatformDistance() / CANVAS_WIDTH,
                     this.getNearestLavaDistance() / CANVAS_WIDTH,
-                    this.isDashing ? 1 : 0
+                    this.timeOnPlatform / 100, // Normalized time on platform
+                    this.successfulJumps / 10, // Normalized jump success
+                    distanceToGoal / Math.sqrt(Math.pow(CANVAS_WIDTH, 2) + Math.pow(CANVAS_HEIGHT, 2)),
+                    Math.min(1, this.distanceTraveled / CANVAS_WIDTH) // Normalized distance traveled
                 ];
+
+                // Store state history
+                this.stateHistory.push(inputs);
+                if (this.stateHistory.length > this.maxHistoryLength) {
+                    this.stateHistory.shift();
+                }
 
                 const outputs = this.brain.predict(inputs);
                 return {
@@ -289,19 +361,56 @@
                 );
                 
                 const timeTaken = Date.now() - this.startTime;
-                let fitness = 1 / (distanceToGoal + 1);
+                const maxTime = 10000; // 10 seconds
+                const timeBonus = Math.max(0, 1 - (timeTaken / maxTime));
                 
+                // Calculate progress towards goal
+                const initialDistance = Math.sqrt(
+                    Math.pow(spawnPoint.x - goal.position.x, 2) +
+                    Math.pow(spawnPoint.y - goal.position.y, 2)
+                );
+                const progressToGoal = (initialDistance - distanceToGoal) / initialDistance;
+                
+                // Base fitness calculation
+                let fitness = progressToGoal * 0.4 + // Progress towards goal
+                            (this.successfulJumps * 0.2) + // Reward for successful jumps
+                            (this.timeOnPlatform / 100) * 0.2 + // Reward for platform navigation
+                            (this.distanceTraveled / CANVAS_WIDTH) * 0.2; // Reward for exploration
+                
+                // Additional bonuses
                 if (this.reachedGoal) {
-                    fitness *= 10;
-                    fitness /= Math.sqrt(timeTaken);
+                    fitness *= 2;
+                    fitness += timeBonus;
                 }
                 
+                // Penalties
                 if (this.dead) {
-                    fitness *= 0.1;
+                    fitness *= 0.5;
                 }
                 
-                this.fitness = fitness;
-                return fitness;
+                this.fitness = Math.max(0, fitness);
+                return this.fitness;
+            }
+
+            update() {
+                // Track distance traveled
+                const dx = this.position.x - this.previousPosition.x;
+                const dy = this.position.y - this.previousPosition.y;
+                this.distanceTraveled += Math.sqrt(dx * dx + dy * dy);
+                
+                // Update previous position
+                this.previousPosition = { x: this.position.x, y: this.position.y };
+                
+                // Track time on platform
+                if (this.isOnGround) {
+                    this.timeOnPlatform++;
+                }
+                
+                // Track successful jumps (when leaving a platform and landing on another)
+                if (!this.isOnGround && this.previouslyOnGround) {
+                    this.successfulJumps++;
+                }
+                this.previouslyOnGround = this.isOnGround;
             }
         }
 
@@ -312,12 +421,23 @@
                 this.generation = 1;
                 this.bestPlayer = null;
                 this.bestScore = 0;
+                this.stagnantGenerations = 0;
+                this.lastBestScore = 0;
+                this.speciesList = [];
+                this.innovationHistory = [];
             }
 
             update() {
                 let allDone = true;
+                const currentTime = Date.now();
                 
                 this.players.forEach(player => {
+                    // Force new generation after 10 seconds
+                    if (currentTime - player.startTime > 10000) {
+                        player.dead = true;
+                        return;
+                    }
+
                     if (!player.dead && !player.reachedGoal) {
                         allDone = false;
                         const decision = player.think(this.getGameState());
@@ -325,7 +445,11 @@
                     }
                 });
 
-                return allDone;
+                if (allDone || (currentTime - this.players[0].startTime > 30000)) {
+                    return true;
+                }
+
+                return false;
             }
 
             getGameState() {
@@ -343,6 +467,7 @@
 
             applyDecision(player, decision) {
                 // Simulate your game's physics for the AI player
+                const prevX = player.position.x;
                 if (decision.left) {
                     player.velocity.x = -MOVE_SPEED;
                     player.facingRight = false;
@@ -364,6 +489,7 @@
                     player.isDashing = true;
                     player.canDash = false;
                     player.velocity.x *= 2;
+                    player.dashCount++; // Increment dash counter
                     setTimeout(() => {
                         player.isDashing = false;
                     }, 300);
@@ -458,37 +584,34 @@
                 // Sort by fitness
                 this.players.sort((a, b) => b.fitness - a.fitness);
                 
-                // Keep the best players
-                const bestPlayers = this.players.slice(0, this.size / 4);
+                // Species separation
+                this.speciesList = this.separateIntoSpecies();
                 
-                // Create new population
+                // Create new population with species
                 const newPlayers = [];
                 
+                // Elitism - keep best performers from each species
+                this.speciesList.forEach(species => {
+                    if (species.length > 5) {
+                        newPlayers.push(species[0].clone());
+                    }
+                });
+                
+                // Fill remaining population
                 while (newPlayers.length < this.size) {
-                    // Select parents from best players
-                    const parentA = bestPlayers[Math.floor(Math.random() * bestPlayers.length)];
-                    const parentB = bestPlayers[Math.floor(Math.random() * bestPlayers.length)];
+                    // Select species based on fitness
+                    const species = this.selectSpecies();
+                    
+                    // Tournament selection within species
+                    const parent1 = this.tournamentSelect(species);
+                    const parent2 = this.tournamentSelect(species);
                     
                     // Create child with crossover
-                    const child = new AIPlayer();
+                    const child = this.crossover(parent1, parent2);
                     
-                    // Crossover weights
-                    for (let i = 0; i < parentA.brain.weights_ih.length; i++) {
-                        for (let j = 0; j < parentA.brain.weights_ih[i].length; j++) {
-                            child.brain.weights_ih[i][j] = Math.random() < 0.5 ? 
-                                parentA.brain.weights_ih[i][j] : parentB.brain.weights_ih[i][j];
-                        }
-                    }
-                    
-                    for (let i = 0; i < parentA.brain.weights_ho.length; i++) {
-                        for (let j = 0; j < parentA.brain.weights_ho[i].length; j++) {
-                            child.brain.weights_ho[i][j] = Math.random() < 0.5 ? 
-                                parentA.brain.weights_ho[i][j] : parentB.brain.weights_ho[i][j];
-                        }
-                    }
-                    
-                    // Mutate
-                    child.brain.mutate(0.1);
+                    // Adaptive mutation
+                    const mutationRate = Math.min(0.3, 0.1 + (this.stagnantGenerations * 0.02));
+                    child.brain.mutate(mutationRate);
                     
                     newPlayers.push(child);
                 }
@@ -496,10 +619,92 @@
                 this.players = newPlayers;
                 this.generation++;
             }
+
+            separateIntoSpecies() {
+                // Implement species separation based on neural network similarity
+                // This helps maintain diversity in the population
+                const species = [];
+                const threshold = 0.3; // Similarity threshold
+                
+                this.players.forEach(player => {
+                    let foundSpecies = false;
+                    for (const speciesGroup of species) {
+                        if (this.isSimilar(player, speciesGroup[0], threshold)) {
+                            speciesGroup.push(player);
+                            foundSpecies = true;
+                            break;
+                        }
+                    }
+                    if (!foundSpecies) {
+                        species.push([player]);
+                    }
+                });
+                
+                return species;
+            }
+
+            isSimilar(player1, player2, threshold) {
+                // Calculate similarity based on neural network weights
+                let totalDiff = 0;
+                let weightCount = 0;
+                
+                // Compare hidden layer weights
+                player1.brain.weights_ih.forEach((row, i) => {
+                    row.forEach((weight, j) => {
+                        totalDiff += Math.abs(weight - player2.brain.weights_ih[i][j]);
+                        weightCount++;
+                    });
+                });
+                
+                // Compare output layer weights
+                player1.brain.weights_ho.forEach((row, i) => {
+                    row.forEach((weight, j) => {
+                        totalDiff += Math.abs(weight - player2.brain.weights_ho[i][j]);
+                        weightCount++;
+                    });
+                });
+                
+                const avgDiff = totalDiff / weightCount;
+                return avgDiff < threshold;
+            }
+
+            tournamentSelect(species) {
+                const tournamentSize = Math.min(5, species.length);
+                const tournament = Array(tournamentSize).fill()
+                    .map(() => species[Math.floor(Math.random() * species.length)]);
+                return tournament.reduce((best, current) => 
+                    current.fitness > best.fitness ? current : best
+                );
+            }
+
+            crossover(parent1, parent2) {
+                const child = new AIPlayer();
+                
+                // Weighted average crossover
+                for (let i = 0; i < parent1.brain.weights_ih.length; i++) {
+                    for (let j = 0; j < parent1.brain.weights_ih[i].length; j++) {
+                        const weight = Math.random() < 0.5 ? 
+                            parent1.brain.weights_ih[i][j] : 
+                            parent2.brain.weights_ih[i][j];
+                        child.brain.weights_ih[i][j] = weight;
+                    }
+                }
+                
+                for (let i = 0; i < parent1.brain.weights_ho.length; i++) {
+                    for (let j = 0; j < parent1.brain.weights_ho[i].length; j++) {
+                        const weight = Math.random() < 0.5 ? 
+                            parent1.brain.weights_ho[i][j] : 
+                            parent2.brain.weights_ho[i][j];
+                        child.brain.weights_ho[i][j] = weight;
+                    }
+                }
+                
+                return child;
+            }
         }
 
         // Training system setup
-        const trainingSystem = new Population(50);
+        const trainingSystem = new Population(500);
 
         // Main training loop
         function trainAI() {
@@ -529,20 +734,20 @@
                 this.currentLevel = 1;
                 this.gameState = this.createGameState(this.currentLevel);
                 this.generationStats = [];
+                this.levelStartTime = Date.now();
+                this.highestLevelReached = 1;
             }
 
             createGameState(level) {
-                const platforms = [];
-                const lava = [];
-                let goal = { x: 1150, y: 700, width: 30, height: 30 };
-
-                platforms.push({ x: 0, y: 750, width: 1200, height: 20 });
-
+                // Reset the game state for the new level
+                createLevel(level);
+                currentLevel = level; // Update the global currentLevel
+                
                 return {
-                    platforms,
-                    lava,
-                    goal,
-                    nearestPlatform: this.findNearestPlatform({ x: 100, y: 700 }, platforms)
+                    platforms: platforms,
+                    lava: lavaBlocks,
+                    goal: goal,
+                    nearestPlatform: this.findNearestPlatform({ x: spawnPoint.x, y: spawnPoint.y }, platforms)
                 };
             }
 
@@ -562,27 +767,69 @@
 
             update() {
                 const allDone = this.population.update(this.gameState);
-                if (allDone) {
-                    this.population.naturalSelection();
+                
+                // Check if any player reached the goal
+                const goalReached = this.population.players.some(player => player.reachedGoal);
+                
+                if (goalReached && this.currentLevel === currentLevel) {
+                    // Update highest level reached if necessary
+                    this.highestLevelReached = Math.max(this.highestLevelReached, this.currentLevel + 1);
+                    this.currentLevel++;
+                    this.gameState = this.createGameState(this.currentLevel);
+                    this.levelStartTime = Date.now();
                     
+                    // Reset all players for the new level
+                    this.population.players.forEach(player => this.resetPlayer(player));
+                }
+
+                if (allDone) {
                     const stats = {
                         generation: this.population.generation,
                         bestFitness: this.population.bestScore,
                         averageFitness: this.population.calculateAverageFitness(),
-                        level: this.currentLevel,
-                        goalReached: this.population.bestScore > 0.9
+                        currentLevel: this.currentLevel,
+                        highestLevelReached: this.highestLevelReached,
+                        goalReached: goalReached
                     };
+                    
+                    // Store the current best player's brain before reset
+                    const bestBrain = this.population.bestPlayer ? this.population.bestPlayer.brain.clone() : null;
+                    
+                    // Perform natural selection
+                    this.population.naturalSelection();
+                    
+                    // Reset to level 1 for the new generation
+                    this.currentLevel = 1;
+                    this.gameState = this.createGameState(1);
+                    
+                    // Reset all players but preserve the best brain for learning
+                    this.population.players.forEach(player => {
+                        this.resetPlayer(player);
+                        if (bestBrain) {
+                            // Clone the best brain with some mutation for each player
+                            player.brain = bestBrain.clone();
+                            player.brain.mutate(0.1); // 10% mutation rate
+                        }
+                    });
                     
                     this.generationStats.push(stats);
                     
-                    if (this.population.bestScore > 0.9) {
-                        this.currentLevel++;
-                        this.gameState = this.createGameState(this.currentLevel);
-                    }
-
                     return stats;
                 }
                 return null;
+            }
+
+            resetPlayer(player) {
+                player.position = { x: spawnPoint.x, y: spawnPoint.y };
+                player.velocity = { x: 0, y: 0 };
+                player.dead = false;
+                player.reachedGoal = false;
+                player.startTime = Date.now();
+                player.dashCount = 0;
+                player.isOnGround = false;
+                player.canDoubleJump = true;
+                player.canDash = true;
+                player.isDashing = false;
             }
 
             getStats() {
@@ -598,6 +845,7 @@
                 this.gameState = this.createGameState(this.currentLevel);
                 this.population = new Population(this.population.players.length);
                 this.generationStats = [];
+                this.highestLevelReached = 1;
             }
         }
 
@@ -610,50 +858,42 @@
                 if (!canvas) return;
 
                 const ctx = canvas.getContext('2d');
-
-                // Clear canvas
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
                 // Draw platforms
                 ctx.fillStyle = '#333';
-                (gameState.platforms || []).forEach(platform => {
-                    if (platform?.position?.x != null && platform?.position?.y != null) {
-                        ctx.fillRect(
-                            platform.position.x,
-                            platform.position.y,
-                            platform.width,
-                            platform.height
-                        );
-                    }
+                platforms.forEach(platform => {
+                    ctx.fillRect(
+                        platform.position.x,
+                        platform.position.y,
+                        platform.width,
+                        platform.height
+                    );
                 });
 
                 // Draw lava
                 ctx.fillStyle = '#ff4444';
-                (gameState.lava || []).forEach(lava => {
-                    if (lava?.position?.x != null && lava?.position?.y != null) {
-                        ctx.fillRect(
-                            lava.position.x,
-                            lava.position.y,
-                            lava.width,
-                            lava.height
-                        );
-                    }
+                lavaBlocks.forEach(lava => {
+                    ctx.fillRect(
+                        lava.position.x,
+                        lava.position.y,
+                        lava.width,
+                        lava.height
+                    );
                 });
 
                 // Draw goal
-                if (gameState.goal?.position?.x != null && gameState.goal?.position?.y != null) {
-                    ctx.fillStyle = '#44ff44';
-                    ctx.fillRect(
-                        gameState.goal.position.x,
-                        gameState.goal.position.y,
-                        gameState.goal.width,
-                        gameState.goal.height
-                    );
-                }
+                ctx.fillStyle = '#44ff44';
+                ctx.fillRect(
+                    goal.position.x,
+                    goal.position.y,
+                    goal.width,
+                    goal.height
+                );
 
                 // Draw AI players
                 population.players.forEach(player => {
-                    if (!player.dead && player.position?.x != null && player.position?.y != null) {
+                    if (!player.dead) {
                         ctx.fillStyle = player.reachedGoal ? '#44ff44' : '#4444ff';
                         ctx.fillRect(
                             player.position.x,
@@ -664,7 +904,6 @@
                     }
                 });
             }, [gameState, population]);
-
 
             React.useEffect(() => {
                 const animate = () => {
@@ -699,7 +938,9 @@
                 averageFitness: 0,
                 bestFitness: 0,
                 goalReached: false,
-                generation: 1
+                generation: 1,
+                currentLevel: 1,
+                highestLevelReached: 1
             });
             const [allTimeStats, setAllTimeStats] = React.useState([]);
             const trainingSystemRef = React.useRef(new TrainingSystem(50));
@@ -738,7 +979,12 @@
                 <div className="flex flex-col gap-8">
                     <Card className="w-full max-w-6xl mx-auto">
                         <CardHeader>
-                            <CardTitle>AI Training Progress - Generation {generation}</CardTitle>
+                            <CardTitle>
+                                AI Training Progress - Generation {generation}
+                                <span className="ml-4 text-gray-600">
+                                    Current Level: {stats.currentLevel} | Best Level: {stats.highestLevelReached}
+                                </span>
+                            </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="flex flex-col gap-4">
@@ -758,7 +1004,7 @@
                                     <span>Speed: {speed}x</span>
                                 </div>
 
-                                <div className="stats grid grid-cols-3 gap-4">
+                                <div className="stats grid grid-cols-4 gap-4">
                                     <div className="stat bg-gray-100 p-4 rounded">
                                         <div className="text-lg">Average Fitness</div>
                                         <div className="text-2xl">{stats.averageFitness.toFixed(4)}</div>
@@ -771,6 +1017,12 @@
                                         <div className="text-lg">Goals Reached</div>
                                         <div className="text-2xl">{allTimeStats.filter(s => s.goalReached).length}</div>
                                     </div>
+                                    <div className="stat bg-gray-100 p-4 rounded">
+                                        <div className="text-lg">Current Level</div>
+                                        <div className="text-2xl">{currentLevelReached}</div>
+                                    </div>
+                                </div>
+
                                 </div>
 
                                 <GameCanvas 
@@ -790,7 +1042,6 @@
                                             <Line type="monotone" dataKey="bestFitness" stroke="#82ca9d" />
                                         </LineChart>
                                     </ResponsiveContainer>
-                                </div>
                             </div>
                         </CardContent>
                     </Card>
