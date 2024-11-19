@@ -402,14 +402,17 @@
                 
                 querySnapshot.docs.forEach(doc => {
                     const data = doc.data();
-                    const currentBestTime = userBestTimes.get(data.username);
-                    
-                    // Update the map only if this is a better time or first time for the user
-                    if (!currentBestTime || data.time < currentBestTime.time) {
-                        userBestTimes.set(data.username, {
-                            time: data.time,
-                            timestamp: data.timestamp
-                        });
+                    // Only consider times that are 14 seconds or more
+                    if (data.time >= 14000) {
+                        const currentBestTime = userBestTimes.get(data.username);
+                        
+                        // Update the map only if this is a better time or first time for the user
+                        if (!currentBestTime || data.time < currentBestTime.time) {
+                            userBestTimes.set(data.username, {
+                                time: data.time,
+                                timestamp: data.timestamp
+                            });
+                        }
                     }
                 });
                 
@@ -440,25 +443,16 @@
             }
         }
 
-        async function submitScore(time) {
-            try {
-                const scoreData = {
-                    username: username || 'Anonymous',
-                    time: Number(time),
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                };
-
-                await leaderboardRef.add(scoreData);
-                await showLeaderboard(time);
-            } catch (error) {
-                console.error("Error submitting score:", error);
-                showLeaderboard(time);
-            }
-        }
-
         async function submitScoreOnce(time) {
             if (hasSubmittedScore) {
                 // If already submitted in this session, just show the leaderboard
+                showLeaderboard(time);
+                return;
+            }
+
+            // Check if time is under 14 seconds (14000 milliseconds)
+            if (time < 14000) {
+                console.log("Time under 14 seconds detected - score not submitted");
                 showLeaderboard(time);
                 return;
             }
@@ -467,41 +461,14 @@
                 showUsernamePrompt(time);
             } else {
                 try {
-                    // Get all existing scores for this username
-                    const userScores = await leaderboardRef
-                        .where('username', '==', username)
-                        .get();
+                    // Submit the new score
+                    const scoreData = {
+                        username: username,
+                        time: Number(time),
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    };
 
-                    let shouldSubmit = true;
-                    let oldScoreRef = null;
-
-                    // Check if this is a better score
-                    userScores.forEach(doc => {
-                        const existingScore = doc.data();
-                        if (existingScore.time <= time) {
-                            shouldSubmit = false;
-                        } else {
-                            // Store reference to delete the old score
-                            oldScoreRef = doc.ref;
-                        }
-                    });
-
-                    if (shouldSubmit) {
-                        // If there's an old score, delete it
-                        if (oldScoreRef) {
-                            await oldScoreRef.delete();
-                        }
-
-                        // Submit the new score
-                        const scoreData = {
-                            username: username,
-                            time: Number(time),
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-                        };
-
-                        await leaderboardRef.add(scoreData);
-                    }
-
+                    await leaderboardRef.add(scoreData);
                     hasSubmittedScore = true;  // Mark as submitted for this session
                     await showLeaderboard(time);
                 } catch (error) {
