@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Platformer Level Editor</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1a1a1a;
+            color: white;
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+
+        #editor-container {
+            width: 1200px;
+            height: 800px;
+            position: relative;
+            background: #333;
+            border: 2px solid #666;
+        }
+
+        #toolbox {
+            width: 200px;
+            background: #222;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tool-btn {
+            margin: 5px 0;
+            padding: 10px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        .tool-btn.active {
+            background: #45a049;
+            border: 2px solid white;
+        }
+
+        .editor-object {
+            position: absolute;
+            cursor: move;
+        }
+
+        .platform { background: #666; }
+        .lava { background: #ff4444; }
+        .spawn { 
+            background: transparent;
+            border: 2px solid #4CAF50;
+            box-sizing: border-box;
+        }
+        .goal { background: #4CAF50; border-radius: 50%; }
+
+        #save-btn, #play-btn, #undo-btn {
+            padding: 10px;
+            margin: 10px 0;
+            background: #2196F3;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        #drawing-helper {
+            position: absolute;
+            border: 2px dashed white;
+            display: none;
+            pointer-events: none;
+        }
+
+        #modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            text-align: center;
+            color: black;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbox">
+        <h3>Tools</h3>
+        <button id="undo-btn">Undo</button>
+        <button class="tool-btn" data-type="platform">Platform</button>
+        <button class="tool-btn" data-type="lava">Lava</button>
+        <button class="tool-btn" data-type="spawn">Spawn Point</button>
+        <button class="tool-btn" data-type="goal">Goal</button>
+        <button id="save-btn">Save Level</button>
+        <button id="play-btn">Play Level</button>
+    </div>
+    <div id="editor-container">
+        <div id="drawing-helper"></div>
+    </div>
+
+    <div id="modal">
+        <div class="modal-content">
+            <p id="modal-text"></p>
+            <button onclick="closeModal()">Close</button>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCKGX_pK2c0-XqFss9yxVmGUQOOk49IVC4",
+            authDomain: "personalwebsite-chance.firebaseapp.com",
+            projectId: "personalwebsite-chance",
+            storageBucket: "personalwebsite-chance.appspot.com",
+            messagingSenderId: "968150134907",
+            appId: "1:968150134907:web:b728c3aa41c92e929432de"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const levelsRef = db.collection('levels');
+
+        let currentTool = null;
+        let selectedElement = null;
+        let isDrawing = false;
+        let startX, startY;
+        let history = [];
+
+        const editorContainer = document.getElementById('editor-container');
+        const drawingHelper = document.getElementById('drawing-helper');
+        const modal = document.getElementById('modal');
+        const modalText = document.getElementById('modal-text');
+
+        // Undo functionality
+        document.getElementById('undo-btn').addEventListener('click', () => {
+            if (history.length > 0) {
+                const lastElement = history.pop();
+                lastElement.remove();
+            }
+        });
+
+        // Show modal function
+        function showModal(message) {
+            modalText.textContent = message;
+            modal.style.display = 'flex';
+        }
+
+        // Close modal function
+        function closeModal() {
+            modal.style.display = 'none';
+        }
+
+        // Tool selection
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Remove active class from all buttons
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                
+                // Add active class to clicked button
+                this.classList.add('active');
+                currentTool = this.dataset.type;
+            });
+        });
+
+        // Dynamic rectangle drawing
+        editorContainer.addEventListener('mousedown', function(e) {
+            if (!currentTool) return;
+
+            // Adjust coordinates relative to container
+            const rect = editorContainer.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+
+            // Remove existing spawn or goal if creating a new one
+            if (currentTool === 'spawn') {
+                const existingSpawn = document.querySelector('.spawn');
+                if (existingSpawn) existingSpawn.remove();
+            }
+            if (currentTool === 'goal') {
+                const existingGoal = document.querySelector('.goal');
+                if (existingGoal) existingGoal.remove();
+            }
+
+            isDrawing = true;
+            drawingHelper.style.left = `${startX}px`;
+            drawingHelper.style.top = `${startY}px`;
+            drawingHelper.style.display = 'block';
+        });
+
+        editorContainer.addEventListener('mousemove', function(e) {
+            if (!isDrawing) return;
+
+            const rect = editorContainer.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+
+            if (currentTool === 'spawn') {
+                // Fixed size for spawn point (player size)
+                const fixedSize = 50;  // Assuming player size is 50x50
+                const left = Math.min(startX, currentX);
+                const top = Math.min(startY, currentY);
+
+                drawingHelper.style.width = `${fixedSize}px`;
+                drawingHelper.style.height = `${fixedSize}px`;
+            } else if (currentTool === 'goal') {
+                // Fixed size for goal (circle)
+                const fixedSize = 50;  // 50x50 circle
+                const left = Math.min(startX, currentX);
+                const top = Math.min(startY, currentY);
+
+                drawingHelper.style.width = `${fixedSize}px`;
+                drawingHelper.style.height = `${fixedSize}px`;
+            } else {
+                const width = Math.abs(currentX - startX);
+                const height = Math.abs(currentY - startY);
+                const left = Math.min(startX, currentX);
+                const top = Math.min(startY, currentY);
+
+                drawingHelper.style.width = `${width}px`;
+                drawingHelper.style.height = `${height}px`;
+            }
+        });
+
+        editorContainer.addEventListener('mouseup', function(e) {
+            if (!isDrawing) return;
+
+            const rect = editorContainer.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+
+            // Create element
+            const element = document.createElement('div');
+            element.className = `editor-object ${currentTool}`;
+
+            if (currentTool === 'spawn') {
+                // Fixed size for spawn point
+                const fixedSize = 50;
+                element.style.width = `${fixedSize}px`;
+                element.style.height = `${fixedSize}px`;
+                element.style.left = `${startX}px`;
+                element.style.top = `${startY}px`;
+            } else if (currentTool === 'goal') {
+                // Fixed size for goal
+                const fixedSize = 50;
+                element.style.width = `${fixedSize}px`;
+                element.style.height = `${fixedSize}px`;
+                element.style.left = `${startX}px`;
+                element.style.top = `${startY}px`;
+            } else {
+                const width = Math.abs(currentX - startX);
+                const height = Math.abs(currentY - startY);
+                const left = Math.min(startX, currentX);
+                const top = Math.min(startY, currentY);
+
+                element.style.left = `${left}px`;
+                element.style.top = `${top}px`;
+                element.style.width = `${width}px`;
+                element.style.height = `${height}px`;
+            }
+
+            // Make elements draggable
+            element.addEventListener('mousedown', startDrag);
+            
+            editorContainer.appendChild(element);
+            history.push(element);
+
+            // Reset drawing state
+            isDrawing = false;
+            drawingHelper.style.display = 'none';
+            drawingHelper.style.width = '0px';
+            drawingHelper.style.height = '0px';
+        });
+
+        // Drag functionality
+        function startDrag(e) {
+            selectedElement = e.target;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startLeft = parseInt(selectedElement.style.left);
+            const startTop = parseInt(selectedElement.style.top);
+
+            function onMouseMove(e) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                selectedElement.style.left = `${startLeft + dx}px`;
+                selectedElement.style.top = `${startTop + dy}px`;
+            }
+
+            function onMouseUp() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                selectedElement = null;
+            }
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        }
+
+        // Save level
+        document.getElementById('save-btn').addEventListener('click', async () => {
+            const elements = document.querySelectorAll('.editor-object');
+            const levelData = {
+                platforms: [],
+                lavaBlocks: [],
+                spawn: null,
+                goal: null
+            };
+
+            elements.forEach(el => {
+                const data = {
+                    x: parseInt(el.style.left),
+                    y: parseInt(el.style.top),
+                    width: parseInt(el.style.width),
+                    height: parseInt(el.style.height)
+                };
+
+                if (el.classList.contains('platform')) {
+                    levelData.platforms.push(data);
+                } else if (el.classList.contains('lava')) {
+                    levelData.lavaBlocks.push(data);
+                } else if (el.classList.contains('spawn')) {
+                    levelData.spawn = data;
+                } else if (el.classList.contains('goal')) {
+                    levelData.goal = data;
+                }
+            });
+
+            // Validate level
+            if (!levelData.spawn) {
+                showModal("Missing spawn point!");
+                return;
+            }
+
+            if (!levelData.goal) {
+                showModal("Missing goal!");
+                return;
+            }
+
+            try {
+                const docRef = await levelsRef.add(levelData);
+                alert(`Level saved with ID: ${docRef.id}`);
+            } catch (error) {
+                console.error("Error saving level:", error);
+                alert("Failed to save level");
+            }
+        });
+
+        document.getElementById('play-btn').addEventListener('click', () => {
+            console.log("Play button clicked!");
+
+            // Collect all level elements
+            const elements = document.querySelectorAll('.editor-object');
+            const levelData = {
+                platforms: [],
+                lavaBlocks: [],
+                spawn: null,
+                goal: null
+            };
+
+            elements.forEach(el => {
+                const data = {
+                    x: parseInt(el.style.left),
+                    y: parseInt(el.style.top),
+                    width: parseInt(el.style.width),
+                    height: parseInt(el.style.height)
+                };
+
+                if (el.classList.contains('platform')) {
+                    levelData.platforms.push(data);
+                } else if (el.classList.contains('lava')) {
+                    levelData.lavaBlocks.push(data);
+                } else if (el.classList.contains('spawn')) {
+                    levelData.spawn = data;
+                } else if (el.classList.contains('goal')) {
+                    levelData.goal = data;
+                }
+            });
+
+            console.log("Level Data:", levelData);
+
+            // Validate level
+            if (!levelData.spawn) {
+                showModal("Missing spawn point!");
+                console.error("No spawn point found!");
+                return;
+            }
+
+            if (!levelData.goal) {
+                showModal("Missing goal!");
+                console.error("No goal found!");
+                return;
+            }
+
+            // Store level data in localStorage
+            localStorage.setItem('customLevel', JSON.stringify(levelData));
+            console.log("Custom level stored in localStorage");
+            
+            // Redirect to the game page with the custom level
+            window.location.href = 'platformer.html?level=custom';
+        });
+    </script>
+</body>
+</html>

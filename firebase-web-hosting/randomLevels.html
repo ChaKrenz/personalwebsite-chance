@@ -513,70 +513,92 @@
             };
         }
 
-        function createLevel(levelNumber, customLevelData = null) { 
+        async function createLevel(levelNumber, customLevelData = null) { 
             console.log("CreateLevel called with:", {
                 levelNumber, 
-                customLevelData, 
-                localStorageCustomLevel: JSON.parse(localStorage.getItem('customLevel'))
+                customLevelData
             });
 
-            if (localStorage.getItem('customLevel') != null) {
-                if (gameTimer) clearInterval(gameTimer);
-                levelNumber = 'custom';
+            // Cancel any existing animation frame
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
             }
 
-            // If no custom level data is passed, try to load from localStorage
-            if (levelNumber === 'custom' && !customLevelData) {
-                const storedCustomLevelData = JSON.parse(localStorage.getItem('customLevel'));
-                customLevelData = storedCustomLevelData;
-                console.log("Loaded custom level from localStorage:", customLevelData);
-            }
+            // Reset game state
+            resetGameState();
 
-            // Check if we're trying to load a custom level and data exists
-            if (levelNumber === 'custom' && customLevelData) {
-                console.log("Proceeding with custom level creation");
-                if (animationFrameId) {
-                    cancelAnimationFrame(animationFrameId);
-                    animationFrameId = null;
+            try {
+                // Fetch levels from Firestore
+                const levelsRef = db.collection('platformerLevels');
+                const querySnapshot = await levelsRef.get();
+                
+                // Check if any levels exist in the database
+                if (querySnapshot.empty) {
+                    throw new Error('No levels found in the database');
                 }
 
-                // Reset movement variables
-                currentVelocityX = 0;
-                lastTime = 0;
-                accumulatedTime = 0;
+                // Convert snapshot to array of levels
+                const levels = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
 
-                // Clear existing level
-                platforms.forEach(p => p.remove());
-                lavaBlocks.forEach(l => l.remove());
-                if (goal) goal.remove();
-                tutorialSigns.forEach(sign => sign.remove());
-                tutorialSigns = [];
+                // Randomly select a level
+                const randomLevel = levels[Math.floor(Math.random() * levels.length)];
 
-                platforms = [];
-                lavaBlocks = [];
+                // Update level display
+                document.getElementById('level-display').textContent = `Random Level: ${randomLevel.name || 'Unnamed'}`;
 
-                // Reset player states
-                canDoubleJump = true;
-                canDash = true;
-                isDashing = false;
-                dashProgress = 0;
-                
-                document.getElementById('level-display').textContent = 'Custom Level';
+                // Set up the level
+                setupLevel(randomLevel);
 
-                // Create platforms from custom level data
-                customLevelData.platforms.forEach(platformData => {
-                    const platform = new GameObject(
-                        platformData.x, 
-                        platformData.y, 
-                        platformData.width, 
-                        platformData.height, 
-                        'platform'
-                    );
-                    platforms.push(platform);
-                });
+            } catch (error) {
+                console.error('Error loading level:', error);
+                throw error; // Rethrow to allow caller to handle the error
+            }
+        }
 
-                // Create lava blocks from custom level data
-                customLevelData.lavaBlocks.forEach(lavaData => {
+        function resetGameState() {
+            // Reset movement variables
+            currentVelocityX = 0;
+            lastTime = 0;
+            accumulatedTime = 0;
+
+            // Clear existing game objects
+            platforms.forEach(p => p.remove());
+            lavaBlocks.forEach(l => l.remove());
+            if (goal) goal.remove();
+            tutorialSigns.forEach(sign => sign.remove());
+
+            // Reset arrays
+            platforms = [];
+            lavaBlocks = [];
+            tutorialSigns = [];
+
+            // Reset player states
+            canDoubleJump = true;
+            canDash = true;
+            isDashing = false;
+            dashProgress = 0;
+        }
+
+        function setupLevel(levelData) {
+            // Create platforms
+            levelData.platforms.forEach(platformData => {
+                const platform = new GameObject(
+                    platformData.x, 
+                    platformData.y, 
+                    platformData.width, 
+                    platformData.height, 
+                    'platform'
+                );
+                platforms.push(platform);
+            });
+
+            // Create lava blocks
+            if (levelData.lavaBlocks) {
+                levelData.lavaBlocks.forEach(lavaData => {
                     const lava = new GameObject(
                         lavaData.x, 
                         lavaData.y, 
@@ -586,245 +608,68 @@
                     );
                     lavaBlocks.push(lava);
                 });
-
-                // Set spawn point
-                spawnPoint = {
-                    x: customLevelData.spawn.x,
-                    y: customLevelData.spawn.y
-                };
-
-                // Create goal
-                if (customLevelData.goal) {
-                    goal = new GameObject(
-                        customLevelData.goal.x, 
-                        customLevelData.goal.y, 
-                        customLevelData.goal.width, 
-                        customLevelData.goal.height, 
-                        'goal'
-                    );
-                }
-
-                // Create or reset player at spawn point
-                if (player) {
-                    player.remove();
-                }
-                player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
-                player.velocity = { x: 0, y: 0 };
-
-                if (!animationFrameId) {
-                    lastTime = performance.now();
-                    animationFrameId = requestAnimationFrame(update);
-                }
-
-                return;
             }
-            else {
-                console.log("Proceeding with standard level creation for level:", levelNumber);
-                if (animationFrameId) {
-                    cancelAnimationFrame(animationFrameId);
-                    animationFrameId = null;
-                }
 
-                // Reset movement variables
-                currentVelocityX = 0;
-                lastTime = 0;
-                accumulatedTime = 0;
+            // Set spawn point
+            spawnPoint = {
+                x: levelData.spawn?.x || 100,
+                y: levelData.spawn?.y || 700
+            };
 
-                // Clear existing level
-                platforms.forEach(p => p.remove());
-                lavaBlocks.forEach(l => l.remove());
-                if (goal) goal.remove();
-                tutorialSigns.forEach(sign => sign.remove());
-                tutorialSigns = [];
+            // Create goal
+            goal = levelData.goal 
+                ? new GameObject(
+                    levelData.goal.x, 
+                    levelData.goal.y, 
+                    levelData.goal.width, 
+                    levelData.goal.height, 
+                    'goal'
+                )
+                : new GameObject(1150, 700, 30, 30, 'goal');
 
-                platforms = [];
-                lavaBlocks = [];
-
-                // Reset player states
-                canDoubleJump = true;
-                canDash = true;
-                isDashing = false;
-                dashProgress = 0;
-                
-                document.getElementById('level-display').textContent = `Level ${levelNumber}`;
-
-                switch(levelNumber) {
-                    case 1: // Basic movement tutorial
-                        spawnPoint = { x: 100, y: 700 };
-                        // Base platform with small gaps to practice basic movement
-                        platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
-
-                        
-                        createTutorialSign(600, 350, "Use ← → to move");
-                        goal = new GameObject(1150, 700, 30, 30, 'goal');
-                        break;
-
-                    case 2: // Jump tutorial
-                        spawnPoint = { x: 100, y: 700 };
-                        // Platforms with increasing heights
-                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
-                        platforms.push(new GameObject(400, 700, 200, 20, 'platform'));
-                        platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
-                        
-                        createTutorialSign(600, 350, "Press ↑ to jump");
-                        goal = new GameObject(800, 550, 30, 30, 'goal');
-                        break;
-
-                    case 3: // Double jump tutorial
-                        spawnPoint = { x: 100, y: 700 };
-                        // One main platform and a very high platform
-                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
-                        platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
-                        createTutorialSign(600, 350, "Press ↑ twice to double jump!");
-                        goal = new GameObject(800, 550, 30, 30, 'goal');
-                        break;
-
-                    case 4: // Dash tutorial
-                        spawnPoint = { x: 100, y: 700 };
-                        // Platforms with a large gap that requires dashing
-                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
-                        platforms.push(new GameObject(900, 750, 300, 20, 'platform'));
-                        
-                        // Lava pit to show consequence of failure
-                        lavaBlocks.push(new GameObject(300, 770, 600, 30, 'lava'));
-                        
-                        createTutorialSign(600, 350, "Press C to dash across!");
-                        goal = new GameObject(1000, 700, 30, 30, 'goal');
-                        break;
-
-                    case 5: // Combining jumps and dashes
-                        spawnPoint = { x: 50, y: 700 };
-                        // Platforms requiring both mechanics
-                        platforms.push(new GameObject(0, 750, 200, 20, 'platform'));
-                        platforms.push(new GameObject(400, 650, 150, 20, 'platform'));
-                        platforms.push(new GameObject(800, 550, 150, 20, 'platform'));
-                        
-                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
-                        goal = new GameObject(850, 500, 30, 30, 'goal');
-                        break;
-
-                    case 6: // Precision jumping
-                        spawnPoint = { x: 50, y: 700 };
-                        // Small platforms in a zigzag pattern
-                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
-                        platforms.push(new GameObject(300, 650, 100, 20, 'platform'));
-                        platforms.push(new GameObject(600, 550, 100, 20, 'platform'));
-                        platforms.push(new GameObject(300, 450, 100, 20, 'platform'));
-                        platforms.push(new GameObject(600, 350, 100, 20, 'platform'));
-                        
-                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
-                        goal = new GameObject(650, 300, 30, 30, 'goal');
-                        break;
-
-                    case 7: // Speed and timing
-                        spawnPoint = { x: 50, y: 700 };
-                        // Platforms with precise dash timing needed
-                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
-                        platforms.push(new GameObject(400, 750, 100, 20, 'platform'));
-                        platforms.push(new GameObject(800, 650, 100, 20, 'platform'));
-                        platforms.push(new GameObject(400, 550, 100, 20, 'platform'));
-                        platforms.push(new GameObject(0, 450, 100, 20, 'platform'));
-                        
-                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(500, 670, 300, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(100, 570, 300, 30, 'lava'));
-                        
-                        goal = new GameObject(50, 400, 30, 30, 'goal');
-                        break;
-
-                    case 8: // Aerial control
-                        spawnPoint = { x: 50, y: 700 };
-                        // Floating platforms requiring precise aerial control
-                        platforms.push(new GameObject(0, 750, 100, 20, 'platform'));
-                        platforms.push(new GameObject(200, 650, 80, 20, 'platform'));
-                        platforms.push(new GameObject(400, 550, 80, 20, 'platform'));
-                        platforms.push(new GameObject(600, 450, 80, 20, 'platform'));
-                        platforms.push(new GameObject(800, 350, 80, 20, 'platform'));
-                        platforms.push(new GameObject(1000, 250, 100, 20, 'platform'));
-                        
-                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
-                        goal = new GameObject(1050, 200, 30, 30, 'goal');
-                        break;
-
-                    case 9: // Complex movement
-                        spawnPoint = { x: 50, y: 700 };
-                        // Mix of all mechanics with tight timing
-                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
-                        platforms.push(new GameObject(300, 650, 80, 20, 'platform'));
-                        platforms.push(new GameObject(600, 750, 80, 20, 'platform'));
-                        platforms.push(new GameObject(900, 650, 80, 20, 'platform'));
-                        platforms.push(new GameObject(1100, 550, 100, 20, 'platform'));
-                        
-                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(380, 670, 220, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(680, 670, 220, 30, 'lava'));
-                        
-                        goal = new GameObject(1150, 500, 30, 30, 'goal');
-                        break;
-
-                    case 10: // Ultimate challenge
-                        spawnPoint = { x: 50, y: 700 };
-                        // Final level using everything learned
-                        platforms.push(new GameObject(0, 750, 80, 20, 'platform'));
-                        platforms.push(new GameObject(200, 650, 60, 20, 'platform'));
-                        platforms.push(new GameObject(400, 550, 60, 20, 'platform'));
-                        platforms.push(new GameObject(700, 450, 60, 20, 'platform'));
-                        platforms.push(new GameObject(400, 350, 60, 20, 'platform'));
-                        platforms.push(new GameObject(100, 250, 60, 20, 'platform'));
-                        platforms.push(new GameObject(400, 150, 60, 20, 'platform'));
-                        
-                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(260, 670, 140, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(460, 570, 240, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(160, 470, 240, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(460, 370, 140, 30, 'lava'));
-                        lavaBlocks.push(new GameObject(160, 270, 240, 30, 'lava'));
-                        
-                        goal = new GameObject(420, 100, 30, 30, 'goal');
-                        break;
-
-                    default:
-                        // Player beat all levels
-                        const finalTime = Date.now() - startTime;
-                        clearInterval(gameTimer);
-                        submitScoreOnce(finalTime);
-                        return;
-                }
-
-                // Create or reset player at spawn point
-                if (player) {
-                    player.remove();
-                }
-                player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
-                player.velocity = { x: 0, y: 0 };
-                
-                if (!animationFrameId) {
-                    lastTime = performance.now();
-                    animationFrameId = requestAnimationFrame(update);
-                }
+            // Create or reset player
+            if (player) {
+                player.remove();
+            }
+            player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
+            player.velocity = { x: 0, y: 0 };
+            
+            // Start game loop
+            if (!animationFrameId) {
+                lastTime = performance.now();
+                animationFrameId = requestAnimationFrame(update);
             }
         }
 
-        function restartGame() {        
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
+        // Helper function to create a default level if random level fails
+        function createDefaultLevel(levelNumber) {
+            console.log("Falling back to default level creation for:", levelNumber);
+            
+            // Your existing createLevel logic for specific levels can be moved here
+            // This ensures you have a fallback if database fetch fails
+            switch(levelNumber) {
+                case 1:
+                    spawnPoint = { x: 100, y: 700 };
+                    platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
+                    goal = new GameObject(1150, 700, 30, 30, 'goal');
+                    break;
+                // Add other default level configurations as needed
+                default:
+                    spawnPoint = { x: 100, y: 700 };
+                    platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
+                    goal = new GameObject(1150, 700, 30, 30, 'goal');
             }
+
+            // Create or reset player at spawn point
+            if (player) {
+                player.remove();
+            }
+            player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
+            player.velocity = { x: 0, y: 0 };
             
-            document.getElementById('leaderboard-container').style.display = 'none';
-            document.getElementById('game-container').innerHTML = originalHtml;
-            
-            // Check if we're in a custom level
-            const customLevel = loadCustomLevel();
-            if (customLevel) {
-                createLevel('custom', customLevel);
-            } else {
-                currentLevel = 1;
-                hasGameStarted = false;
-                startTime = null;
-                hasSubmittedScore = false;
-                if (gameTimer) clearInterval(gameTimer);
-                createLevel(currentLevel);
+            if (!animationFrameId) {
+                lastTime = performance.now();
+                animationFrameId = requestAnimationFrame(update);
             }
         }
 
@@ -1084,7 +929,6 @@
                     }
                     break;
                 case 'r':
-                    localStorage.removeItem('customLevel');
                     restartGame();
                     break;
             }
