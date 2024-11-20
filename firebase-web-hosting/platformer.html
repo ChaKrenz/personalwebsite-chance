@@ -162,9 +162,32 @@
             border-radius: 10px;
             color: white;
             font-family: monospace;
-            min-width: 400px;
+            width: 800px;
+            max-height: 90vh;
             display: none;
             z-index: 1001;
+            overflow-y: auto;
+        }
+
+        /* New Leaderboard and Splits Layout */
+        .results-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .leaderboard-section,
+        .splits-table-container {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .results-container h3 {
+            text-align: center;
+            margin-bottom: 15px;
+            color: #4CAF50;
         }
 
         .leaderboard-entry {
@@ -188,6 +211,35 @@
         .gold { color: #FFD700; }
         .silver { color: #C0C0C0; }
         .bronze { color: #CD7F32; }
+
+        .splits-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .splits-table th, 
+        .splits-table td {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .splits-table th {
+            background: rgba(255, 255, 255, 0.2);
+            font-weight: bold;
+        }
+
+        .total-time {
+            margin-top: 10px;
+            font-weight: bold;
+            text-align: center;
+            color: #4CAF50;
+        }
+
+        .splits-table tbody tr:last-child {
+            display: none;
+        }
 
         #username-prompt {
             position: fixed;
@@ -331,6 +383,8 @@
         let platforms = [];
         let lavaBlocks = [];
         let goal = null;
+        let levelSplits = [];
+        let currentLevelStartTime = null;
 
         const keys = {
             left: false,
@@ -390,10 +444,24 @@
             const leaderboardContainer = document.getElementById('leaderboard-container');
             const leaderboardEntries = document.getElementById('leaderboard-entries');
             
+            // Ensure the leaderboard container is visible and clear previous content
             leaderboardContainer.style.display = 'block';
             leaderboardEntries.innerHTML = '<div style="text-align: center;">Loading leaderboard...</div>';
 
             try {
+                // Add the final level's split if not already added
+                if (currentLevelStartTime) {
+                    const levelEndTime = Date.now();
+                    const levelSplitTime = levelEndTime - currentLevelStartTime;
+                    levelSplits.push({
+                        level: currentLevel,
+                        time: levelSplitTime
+                    });
+                }
+
+                // Filter out level 11 splits
+                const validSplits = levelSplits.filter(split => split.level !== 11);
+
                 // Get all scores
                 const querySnapshot = await leaderboardRef.get();
                 
@@ -425,7 +493,8 @@
                     .sort((a, b) => a.time - b.time)
                     .slice(0, 10); // Take top 10
 
-                const entries = sortedEntries.map((entry, index) => {
+                // Create leaderboard entries HTML
+                const leaderboardEntriesHTML = sortedEntries.map((entry, index) => {
                     const isCurrentScore = entry.time === currentTime && entry.username === username;
                     return `
                         <div class="leaderboard-entry ${isCurrentScore ? 'current-score' : ''}">
@@ -436,7 +505,43 @@
                     `;
                 }).join('');
 
-                leaderboardEntries.innerHTML = entries || '<div style="text-align: center;">No scores yet!</div>';
+                // Create splits table HTML with improved formatting
+                const totalTime = currentTime;
+
+                // Create splits table HTML with the correct total time
+                const splitsTableHTML = `
+                    <div class="splits-table-container">
+                        <h3>Level Splits</h3>
+                        <table class="splits-table">
+                            <thead>
+                                <tr>
+                                    <th>Level</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${levelSplits.map(split => `
+                                    <tr>
+                                        <td>Level ${split.level}</td>
+                                        <td>${formatTime(split.time)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        <div class="total-time">Total Time (Levels 1-10): ${formatTime(totalTime)}</div>
+                    </div>
+                `;
+
+                // Create a container to hold both leaderboard and splits side by side
+                leaderboardEntries.innerHTML = `
+                    <div class="results-container">
+                        <div class="leaderboard-section">
+                            <h3>Leaderboard</h3>
+                            ${leaderboardEntriesHTML || '<div style="text-align: center;">No scores yet!</div>'}
+                        </div>
+                        ${splitsTableHTML}
+                    </div>
+                `;
             } catch (error) {
                 console.error("Error fetching leaderboard:", error);
                 leaderboardEntries.innerHTML = '<div style="text-align: center;">Error loading leaderboard</div>';
@@ -619,6 +724,17 @@
                 return;
             }
             else {
+                if (currentLevel > 1 && currentLevelStartTime) {
+                    const levelEndTime = Date.now();
+                    const levelSplitTime = levelEndTime - currentLevelStartTime;
+                    levelSplits.push({
+                        level: currentLevel - 1,
+                        time: levelSplitTime
+                    });
+                }
+
+                // Reset the current level start time
+                currentLevelStartTime = Date.now();
                 console.log("Proceeding with standard level creation for level:", levelNumber);
                 if (animationFrameId) {
                     cancelAnimationFrame(animationFrameId);
@@ -810,6 +926,9 @@
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
+
+            levelSplits = [];
+            currentLevelStartTime = null;
             
             document.getElementById('leaderboard-container').style.display = 'none';
             document.getElementById('game-container').innerHTML = originalHtml;
@@ -1124,6 +1243,9 @@
                 cancelAnimationFrame(animationFrameId);
                 animationFrameId = null;
             }
+
+            levelSplits = [];
+            currentLevelStartTime = null;
             
             document.getElementById('leaderboard-container').style.display = 'none';
             document.getElementById('game-container').innerHTML = originalHtml;
