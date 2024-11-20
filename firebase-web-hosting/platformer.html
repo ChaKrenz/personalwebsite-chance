@@ -1,73 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Gadget Runner - Menu</title>
+    <title>Gadget Runner Game</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background: #1a1a1a;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-family: monospace;
-            color: white;
         }
 
-        .menu-container {
-            background: rgba(0, 0, 0, 0.7);
-            padding: 30px;
-            border-radius: 10px;
-            text-align: center;
-        }
-
-        .menu-title {
-            font-size: 36px;
-            margin-bottom: 20px;
-        }
-
-        .menu-button {
-            display: block;
-            width: 300px;
-            padding: 15px;
-            margin: 10px 0;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 18px;
-            cursor: pointer;
-            transition: background 0.2s ease;
-            font-family: monospace;
-        }
-
-        .menu-button:hover {
-            background: #45a049;
-        }
-
-        .animation-container {
-            width: 300px;
-            height: 150px;
+        #game-container {
+            width: 1200px;
+            height: 800px;
             position: relative;
-            margin-bottom: 20px;
-            overflow: hidden;
+            margin: 0 auto;
             background: #1a1a1a;
-            border-radius: 5px;
-            border: 2px solid #333;
         }
 
-        .player-animation {
+        .player {
             width: 30px;
             height: 30px;
             background: #4CAF50;
             position: absolute;
             border-radius: 5px;
-            bottom: 30px;
-            animation: movePlayer 3s infinite linear;
+            transition: opacity 0.15s ease-in-out;
         }
 
-        .player-animation::after {
+        .player::after {
             content: '';
             position: absolute;
             width: 10px;
@@ -75,36 +34,54 @@
             background: #2E7D32;
             border-radius: 50%;
             top: 50%;
-            right: 2px;
             transform: translateY(-50%);
+            transition: left right 0.2s ease;
         }
 
-        .goal-animation {
+        .player.facing-right::after {
+            right: 2px;
+        }
+
+        .player.facing-left::after {
+            left: 2px;
+        }
+
+        .platform {
+            position: absolute;
+            background: #666;
+            border-radius: 3px;
+        }
+
+        .lava {
+            position: absolute;
+            background: #ff4444;
+            border-radius: 3px;
+        }
+
+        .goal {
             position: absolute;
             width: 30px;
             height: 30px;
             background: #4CAF50;
             border-radius: 50%;
-            bottom: 30px;
-            right: 30px;
             animation: pulse 2s infinite;
         }
 
-        .platform-animation {
+        .tutorial-sign {
             position: absolute;
-            height: 10px;
-            background: #666;
-            bottom: 20px;
+            background: none;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 1000;
+            font-size: 32px;
+            text-align: center;
             width: 100%;
-            border-radius: 3px;
-        }
-
-        @keyframes movePlayer {
-            0% { left: 30px; bottom: 30px; }
-            40% { left: 120px; bottom: 30px; }
-            50% { left: 150px; bottom: 100px; }
-            60% { left: 180px; bottom: 30px; }
-            100% { left: 240px; bottom: 30px; }
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
 
         @keyframes pulse {
@@ -112,33 +89,1055 @@
             50% { transform: scale(1.2); opacity: 0.8; }
             100% { transform: scale(1); opacity: 1; }
         }
+
+        #hud {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: monospace;
+            z-index: 1000;
+        }
+
+        #level-display {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-family: monospace;
+            font-size: 24px;
+            z-index: 1000;
+        }
+
+        #controls {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 1000;
+        }
+
+        .controls-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .control-item {
+            margin: 5px 0;
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .key {
+            background: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #666;
+        }
+
+        @keyframes dash {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .dashing {
+            animation: dash 0.3s ease-in-out;
+        }
+
+        #leaderboard-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-family: monospace;
+            min-width: 400px;
+            display: none;
+            z-index: 1001;
+        }
+
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+
+        .current-score {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        .place {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .gold { color: #FFD700; }
+        .silver { color: #C0C0C0; }
+        .bronze { color: #CD7F32; }
+
+        #username-prompt {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            font-family: monospace;
+            text-align: center;
+            z-index: 1002;
+            display: none;
+        }
+
+        .input-field {
+            margin: 10px 0;
+            padding: 8px;
+            width: 200px;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        .button:hover {
+            background: #45a049;
+        }
     </style>
 </head>
 <body>
-    <div class="menu-container">
-        <div class="animation-container">
-            <div class="platform-animation"></div>
-            <div class="player-animation"></div>
-            <div class="goal-animation"></div>
+    <div id="game-container">
+        <div id="level-display">Level 1</div>
+        <div id="timer-display" style="position: fixed; top: 40px; left: 50%; transform: translateX(-50%); color: white; font-family: monospace; font-size: 24px; z-index: 1000;">Time: 00:00.00</div>
+        <div id="hud"></div>
+        <div id="controls">
+            <div class="controls-title">CONTROLS</div>
+            <div class="control-item">
+                <span class="key">← / A</span>
+                <span>Move Left</span>
+            </div>
+            <div class="control-item">
+                <span class="key">→ / D</span>
+                <span>Move Right</span>
+            </div>
+            <div class="control-item">
+                <span class="key">↑ / W</span>
+                <span>Jump/Double Jump</span>
+            </div>
+            <div class="control-item">
+                <span class="key">C / M</span>
+                <span>Dash</span>
+            </div>
+            <div class="control-item">
+                <span class="key">R</span>
+                <span>Restart Game</span>
+            </div>
         </div>
-        <div class="menu-title">PLATFORMER</div>
-        <button class="menu-button" onclick="startOriginalGame()">Original Platformer</button>
-        <button class="menu-button" onclick="startLevelCreator()">Level Creator</button>
-        <button class="menu-button" onclick="startRandomLevels()">Random Levels</button>
     </div>
 
+    <div id="username-prompt">
+        <h2>Enter Your Username</h2>
+        <input type="text" id="username-input" class="input-field" maxlength="20" placeholder="Username">
+        <button id="username-submit" class="button">Submit</button>
+    </div>
+
+    <div id="leaderboard-container">
+        <h2 style="text-align: center;">Top 10 Times</h2>
+        <div id="leaderboard-entries"></div>
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="play-again" class="button">Play Again</button>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
     <script>
-        function startOriginalGame() {
-            window.location.href = 'platformer.html';
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCKGX_pK2c0-XqFss9yxVmGUQOOk49IVC4",
+            authDomain: "personalwebsite-chance.firebaseapp.com",
+            projectId: "personalwebsite-chance",
+            storageBucket: "personalwebsite-chance.appspot.com",
+            messagingSenderId: "968150134907",
+            appId: "1:968150134907:web:b728c3aa41c92e929432de"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const leaderboardRef = db.collection('platformer');
+
+        // Store original HTML for reset
+        const originalHtml = document.getElementById('game-container').innerHTML;
+
+        // Game Constants
+        const GRAVITY = 0.7;
+        const JUMP_FORCE = 13;
+        const MOVE_SPEED = 7;
+        const DASH_SPEED = 12;
+        const DASH_DURATION = 8;
+        const DASH_DISTANCE = 150;
+        const MOVEMENT_SMOOTHING = 0.85;
+        const FIXED_DELTA_TIME = 1/60;
+        const MAX_DELTA_TIME = 0.05;
+
+        // Game State Variables
+        let username = localStorage.getItem('platformerUsername');
+        let animationFrameId = null;
+        let hasSubmittedScore = false;
+        let lastTime = 0;
+        let currentVelocityX = 0;
+        let accumulatedTime = 0;
+        let preDashVelocityX = 0;
+        let isDashing = false;
+        let dashStartX = 0;
+        let dashTargetX = 0;
+        let dashProgress = 0;
+        let gameTimer = null;
+        let startTime = null;
+        let hasGameStarted = false;
+        let finalTime = null;
+        let currentLevel = 1;
+        let canDash = true;
+        let spawnPoint = { x: 100, y: 100 };
+        let canDoubleJump = true;
+        let tutorialSigns = [];
+        let player = null;
+        let isOnGround = false;
+        let platforms = [];
+        let lavaBlocks = [];
+        let goal = null;
+
+        const keys = {
+            left: false,
+            right: false,
+            up: false
+        };
+
+        // GameObject Class
+        class GameObject {
+            constructor(x, y, width, height, className) {
+                this.position = { x, y };
+                this.velocity = { x: 0, y: 0 };
+                this.width = width;
+                this.height = height;
+                this.facingRight = true;
+
+                this.element = document.createElement('div');
+                this.element.className = className;
+                this.element.style.width = `${width}px`;
+                this.element.style.height = `${height}px`;
+                
+                if (className === 'player') {
+                    this.element.classList.add('facing-right');
+                }
+                
+                document.getElementById('game-container').appendChild(this.element);
+                this.updatePosition();
+            }
+
+            updatePosition() {
+                this.element.style.left = `${this.position.x}px`;
+                this.element.style.top = `${this.position.y}px`;
+            }
+
+            setDirection(facingRight) {
+                if (this.facingRight !== facingRight) {
+                    this.facingRight = facingRight;
+                    this.element.classList.remove('facing-right', 'facing-left');
+                    this.element.classList.add(facingRight ? 'facing-right' : 'facing-left');
+                }
+            }
+
+            remove() {
+                this.element.remove();
+            }
+
+            intersects(other) {
+                return this.position.x < other.position.x + other.width &&
+                       this.position.x + this.width > other.position.x &&
+                       this.position.y < other.position.y + other.height &&
+                       this.position.y + this.height > other.position.y;
+            }
         }
 
-        function startLevelCreator() {
-            window.location.href = 'levelcreator.html';
+        // Leaderboard Functions
+        async function showLeaderboard(currentTime) {
+            const leaderboardContainer = document.getElementById('leaderboard-container');
+            const leaderboardEntries = document.getElementById('leaderboard-entries');
+            
+            leaderboardContainer.style.display = 'block';
+            leaderboardEntries.innerHTML = '<div style="text-align: center;">Loading leaderboard...</div>';
+
+            try {
+                // Get all scores
+                const querySnapshot = await leaderboardRef.get();
+                
+                // Create a map to store the fastest time for each username
+                const userBestTimes = new Map();
+                
+                querySnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    // Only consider times that are 14 seconds or more
+                    if (data.time >= 14000) {
+                        const currentBestTime = userBestTimes.get(data.username);
+                        
+                        // Update the map only if this is a better time or first time for the user
+                        if (!currentBestTime || data.time < currentBestTime.time) {
+                            userBestTimes.set(data.username, {
+                                time: data.time,
+                                timestamp: data.timestamp
+                            });
+                        }
+                    }
+                });
+                
+                // Convert map to array and sort by time
+                const sortedEntries = Array.from(userBestTimes.entries())
+                    .map(([username, data]) => ({
+                        username,
+                        time: data.time
+                    }))
+                    .sort((a, b) => a.time - b.time)
+                    .slice(0, 10); // Take top 10
+
+                const entries = sortedEntries.map((entry, index) => {
+                    const isCurrentScore = entry.time === currentTime && entry.username === username;
+                    return `
+                        <div class="leaderboard-entry ${isCurrentScore ? 'current-score' : ''}">
+                            <span class="place ${index < 3 ? ['gold', 'silver', 'bronze'][index] : ''}">${index + 1}</span>
+                            <span>${entry.username}</span>
+                            <span>${formatTime(entry.time)}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                leaderboardEntries.innerHTML = entries || '<div style="text-align: center;">No scores yet!</div>';
+            } catch (error) {
+                console.error("Error fetching leaderboard:", error);
+                leaderboardEntries.innerHTML = '<div style="text-align: center;">Error loading leaderboard</div>';
+            }
         }
 
-        function startRandomLevels() {
-            window.location.href = 'randomLevels.html';
+        async function submitScoreOnce(time) {
+            if (hasSubmittedScore) {
+                // If already submitted in this session, just show the leaderboard
+                showLeaderboard(time);
+                return;
+            }
+
+            // Check if time is under 14 seconds (14000 milliseconds)
+            if (time < 14000) {
+                console.log("Time under 14 seconds detected - score not submitted");
+                showLeaderboard(time);
+                return;
+            }
+
+            if (!username) {
+                showUsernamePrompt(time);
+            } else {
+                try {
+                    // Submit the new score
+                    const scoreData = {
+                        username: username,
+                        time: Number(time),
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    await leaderboardRef.add(scoreData);
+                    hasSubmittedScore = true;  // Mark as submitted for this session
+                    await showLeaderboard(time);
+                } catch (error) {
+                    console.error("Error submitting score:", error);
+                    showLeaderboard(time);
+                }
+            }
         }
+
+        // Game Functions
+        function createTutorialSign(x, y, text) {
+            const sign = document.createElement('div');
+            sign.className = 'tutorial-sign';
+            sign.textContent = text;
+            sign.style.left = `${x}px`;
+            sign.style.top = `${y}px`;
+            document.getElementById('game-container').appendChild(sign);
+            tutorialSigns.push(sign);
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = ms / 1000;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = Math.floor(totalSeconds % 60);
+            const milliseconds = Math.floor((ms % 1000) / 10);
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+        }
+
+        // Add this function to the existing game script, before createLevel()
+        function loadCustomLevel() {
+            const customLevelData = JSON.parse(localStorage.getItem('customLevel'));
+            
+            if (!customLevelData) return null;
+
+            return {
+                spawnPoint: customLevelData.spawn 
+                    ? { x: customLevelData.spawn.x, y: customLevelData.spawn.y } 
+                    : { x: 100, y: 100 },
+                platforms: customLevelData.platforms || [],
+                lavaBlocks: customLevelData.lavaBlocks || [],
+                goal: customLevelData.goal
+            };
+        }
+
+        function createLevel(levelNumber, customLevelData = null) { 
+            console.log("CreateLevel called with:", {
+                levelNumber, 
+                customLevelData, 
+                localStorageCustomLevel: JSON.parse(localStorage.getItem('customLevel'))
+            });
+
+            if (localStorage.getItem('customLevel') != null) {
+                
+                levelNumber = 'custom';
+            }
+
+            // If no custom level data is passed, try to load from localStorage
+            if (levelNumber === 'custom' && !customLevelData) {
+                const storedCustomLevelData = JSON.parse(localStorage.getItem('customLevel'));
+                customLevelData = storedCustomLevelData;
+                console.log("Loaded custom level from localStorage:", customLevelData);
+            }
+
+            // Check if we're trying to load a custom level and data exists
+            if (levelNumber === 'custom' && customLevelData) {
+                console.log("Proceeding with custom level creation");
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+
+                // Reset movement variables
+                currentVelocityX = 0;
+                lastTime = 0;
+                accumulatedTime = 0;
+
+                // Clear existing level
+                platforms.forEach(p => p.remove());
+                lavaBlocks.forEach(l => l.remove());
+                if (goal) goal.remove();
+                tutorialSigns.forEach(sign => sign.remove());
+                tutorialSigns = [];
+
+                platforms = [];
+                lavaBlocks = [];
+
+                // Reset player states
+                canDoubleJump = true;
+                canDash = true;
+                isDashing = false;
+                dashProgress = 0;
+                
+                document.getElementById('level-display').textContent = 'Custom Level';
+
+                // Create platforms from custom level data
+                customLevelData.platforms.forEach(platformData => {
+                    const platform = new GameObject(
+                        platformData.x, 
+                        platformData.y, 
+                        platformData.width, 
+                        platformData.height, 
+                        'platform'
+                    );
+                    platforms.push(platform);
+                });
+
+                // Create lava blocks from custom level data
+                customLevelData.lavaBlocks.forEach(lavaData => {
+                    const lava = new GameObject(
+                        lavaData.x, 
+                        lavaData.y, 
+                        lavaData.width, 
+                        lavaData.height, 
+                        'lava'
+                    );
+                    lavaBlocks.push(lava);
+                });
+
+                // Set spawn point
+                spawnPoint = {
+                    x: customLevelData.spawn.x,
+                    y: customLevelData.spawn.y
+                };
+
+                // Create goal
+                if (customLevelData.goal) {
+                    goal = new GameObject(
+                        customLevelData.goal.x, 
+                        customLevelData.goal.y, 
+                        customLevelData.goal.width, 
+                        customLevelData.goal.height, 
+                        'goal'
+                    );
+                }
+
+                // Create or reset player at spawn point
+                if (player) {
+                    player.remove();
+                }
+                player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
+                player.velocity = { x: 0, y: 0 };
+
+                if (!animationFrameId) {
+                    lastTime = performance.now();
+                    animationFrameId = requestAnimationFrame(update);
+                }
+
+                return;
+            }
+            else {
+                console.log("Proceeding with standard level creation for level:", levelNumber);
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+
+                // Reset movement variables
+                currentVelocityX = 0;
+                lastTime = 0;
+                accumulatedTime = 0;
+
+                // Clear existing level
+                platforms.forEach(p => p.remove());
+                lavaBlocks.forEach(l => l.remove());
+                if (goal) goal.remove();
+                tutorialSigns.forEach(sign => sign.remove());
+                tutorialSigns = [];
+
+                platforms = [];
+                lavaBlocks = [];
+
+                // Reset player states
+                canDoubleJump = true;
+                canDash = true;
+                isDashing = false;
+                dashProgress = 0;
+                
+                document.getElementById('level-display').textContent = `Level ${levelNumber}`;
+
+                switch(levelNumber) {
+                    case 1: // Basic movement tutorial
+                        spawnPoint = { x: 100, y: 700 };
+                        // Base platform with small gaps to practice basic movement
+                        platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
+
+                        
+                        createTutorialSign(600, 350, "Use ← → to move");
+                        goal = new GameObject(1150, 700, 30, 30, 'goal');
+                        break;
+
+                    case 2: // Jump tutorial
+                        spawnPoint = { x: 100, y: 700 };
+                        // Platforms with increasing heights
+                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                        platforms.push(new GameObject(400, 700, 200, 20, 'platform'));
+                        platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
+                        
+                        createTutorialSign(600, 350, "Press ↑ to jump");
+                        goal = new GameObject(800, 550, 30, 30, 'goal');
+                        break;
+
+                    case 3: // Double jump tutorial
+                        spawnPoint = { x: 100, y: 700 };
+                        // One main platform and a very high platform
+                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                        platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
+                        createTutorialSign(600, 350, "Press ↑ twice to double jump!");
+                        goal = new GameObject(800, 550, 30, 30, 'goal');
+                        break;
+
+                    case 4: // Dash tutorial
+                        spawnPoint = { x: 100, y: 700 };
+                        // Platforms with a large gap that requires dashing
+                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                        platforms.push(new GameObject(900, 750, 300, 20, 'platform'));
+                        
+                        // Lava pit to show consequence of failure
+                        lavaBlocks.push(new GameObject(300, 770, 600, 30, 'lava'));
+                        
+                        createTutorialSign(600, 350, "Press C to dash across!");
+                        goal = new GameObject(1000, 700, 30, 30, 'goal');
+                        break;
+
+                    case 5: // Combining jumps and dashes
+                        spawnPoint = { x: 50, y: 700 };
+                        // Platforms requiring both mechanics
+                        platforms.push(new GameObject(0, 750, 200, 20, 'platform'));
+                        platforms.push(new GameObject(400, 650, 150, 20, 'platform'));
+                        platforms.push(new GameObject(800, 550, 150, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        goal = new GameObject(850, 500, 30, 30, 'goal');
+                        break;
+
+                    case 6: // Precision jumping
+                        spawnPoint = { x: 50, y: 700 };
+                        // Small platforms in a zigzag pattern
+                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                        platforms.push(new GameObject(300, 650, 100, 20, 'platform'));
+                        platforms.push(new GameObject(600, 550, 100, 20, 'platform'));
+                        platforms.push(new GameObject(300, 450, 100, 20, 'platform'));
+                        platforms.push(new GameObject(600, 350, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        goal = new GameObject(650, 300, 30, 30, 'goal');
+                        break;
+
+                    case 7: // Speed and timing
+                        spawnPoint = { x: 50, y: 700 };
+                        // Platforms with precise dash timing needed
+                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                        platforms.push(new GameObject(400, 750, 100, 20, 'platform'));
+                        platforms.push(new GameObject(800, 650, 100, 20, 'platform'));
+                        platforms.push(new GameObject(400, 550, 100, 20, 'platform'));
+                        platforms.push(new GameObject(0, 450, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(500, 670, 300, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(100, 570, 300, 30, 'lava'));
+                        
+                        goal = new GameObject(50, 400, 30, 30, 'goal');
+                        break;
+
+                    case 8: // Aerial control
+                        spawnPoint = { x: 50, y: 700 };
+                        // Floating platforms requiring precise aerial control
+                        platforms.push(new GameObject(0, 750, 100, 20, 'platform'));
+                        platforms.push(new GameObject(200, 650, 80, 20, 'platform'));
+                        platforms.push(new GameObject(400, 550, 80, 20, 'platform'));
+                        platforms.push(new GameObject(600, 450, 80, 20, 'platform'));
+                        platforms.push(new GameObject(800, 350, 80, 20, 'platform'));
+                        platforms.push(new GameObject(1000, 250, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        goal = new GameObject(1050, 200, 30, 30, 'goal');
+                        break;
+
+                    case 9: // Complex movement
+                        spawnPoint = { x: 50, y: 700 };
+                        // Mix of all mechanics with tight timing
+                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                        platforms.push(new GameObject(300, 650, 80, 20, 'platform'));
+                        platforms.push(new GameObject(600, 750, 80, 20, 'platform'));
+                        platforms.push(new GameObject(900, 650, 80, 20, 'platform'));
+                        platforms.push(new GameObject(1100, 550, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(380, 670, 220, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(680, 670, 220, 30, 'lava'));
+                        
+                        goal = new GameObject(1150, 500, 30, 30, 'goal');
+                        break;
+
+                    case 10: // Ultimate challenge
+                        spawnPoint = { x: 50, y: 700 };
+                        // Final level using everything learned
+                        platforms.push(new GameObject(0, 750, 80, 20, 'platform'));
+                        platforms.push(new GameObject(200, 650, 60, 20, 'platform'));
+                        platforms.push(new GameObject(400, 550, 60, 20, 'platform'));
+                        platforms.push(new GameObject(700, 450, 60, 20, 'platform'));
+                        platforms.push(new GameObject(400, 350, 60, 20, 'platform'));
+                        platforms.push(new GameObject(100, 250, 60, 20, 'platform'));
+                        platforms.push(new GameObject(400, 150, 60, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(260, 670, 140, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(460, 570, 240, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(160, 470, 240, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(460, 370, 140, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(160, 270, 240, 30, 'lava'));
+                        
+                        goal = new GameObject(420, 100, 30, 30, 'goal');
+                        break;
+
+                    default:
+                        // Player beat all levels
+                        const finalTime = Date.now() - startTime;
+                        clearInterval(gameTimer);
+                        submitScoreOnce(finalTime);
+                        return;
+                }
+
+                // Create or reset player at spawn point
+                if (player) {
+                    player.remove();
+                }
+                player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
+                player.velocity = { x: 0, y: 0 };
+                
+                if (!animationFrameId) {
+                    lastTime = performance.now();
+                    animationFrameId = requestAnimationFrame(update);
+                }
+            }
+        }
+
+        function restartGame() {        
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
+            document.getElementById('leaderboard-container').style.display = 'none';
+            document.getElementById('game-container').innerHTML = originalHtml;
+            
+            // Check if we're in a custom level
+            const customLevel = loadCustomLevel();
+            if (customLevel) {
+                createLevel('custom', customLevel);
+            } else {
+                currentLevel = 1;
+                hasGameStarted = false;
+                startTime = null;
+                hasSubmittedScore = false;
+                if (gameTimer) clearInterval(gameTimer);
+                createLevel(currentLevel);
+            }
+        }
+
+        async function loadSavedLevels() {
+            try {
+                const querySnapshot = await levelsRef.get();
+                const savedLevels = querySnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+
+                // You could implement a modal or dropdown to select and load these levels
+                console.log('Saved Levels:', savedLevels);
+                // Example usage: localStorage.setItem('customLevel', JSON.stringify(savedLevels[0]));
+            } catch (error) {
+                console.error('Error fetching saved levels:', error);
+            }
+        }
+
+        function showUsernamePrompt(finalTime) {
+            const prompt = document.getElementById('username-prompt');
+            prompt.style.display = 'block';
+            
+            document.getElementById('username-submit').onclick = () => {
+                username = document.getElementById('username-input').value.trim() || 'Anonymous';
+                localStorage.setItem('platformerUsername', username);
+                prompt.style.display = 'none';
+                submitScoreOnce(finalTime);
+            };
+        }
+
+        function update(currentTime = 0) {
+            if (!player) return;
+
+            // Calculate delta time in seconds
+            const deltaTime = Math.min((currentTime - lastTime) / 1000, MAX_DELTA_TIME);
+            lastTime = currentTime;
+            accumulatedTime += deltaTime;
+
+            // Start timer on first input (now including dash)
+            if (!hasGameStarted && (keys.left || keys.right || keys.up || isDashing)) {
+                hasGameStarted = true;
+                startTime = Date.now();
+                gameTimer = setInterval(() => {
+                    const currentTime = Date.now() - startTime;
+                    document.getElementById('timer-display').textContent = `Time: ${formatTime(currentTime)}`;
+                }, 10);
+            }
+
+            // Fixed timestep update
+            while (accumulatedTime >= FIXED_DELTA_TIME) {
+                updatePhysics(FIXED_DELTA_TIME);
+                accumulatedTime -= FIXED_DELTA_TIME;
+            }
+
+            // Update visuals
+            player.updatePosition();
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+        function updatePhysics(dt) {
+            if (!hasGameStarted && (keys.left || keys.right || keys.up)) {
+                hasGameStarted = true;
+                startTime = Date.now();
+                gameTimer = setInterval(() => {
+                    const currentTime = Date.now() - startTime;
+                    document.getElementById('timer-display').textContent = `Time: ${formatTime(currentTime)}`;
+                }, 10);
+            }
+
+            // Smoother movement handling
+            let targetVelocityX = 0;
+            if (!isDashing) {
+                if (keys.left) {
+                    targetVelocityX = -MOVE_SPEED;
+                    player.setDirection(false);
+                } else if (keys.right) {
+                    targetVelocityX = MOVE_SPEED;
+                    player.setDirection(true);
+                }
+
+                // Smooth velocity transition
+                currentVelocityX = currentVelocityX * MOVEMENT_SMOOTHING + targetVelocityX * (1 - MOVEMENT_SMOOTHING);
+                player.velocity.x = currentVelocityX;
+
+                // Update position directly with velocity
+                player.position.x += player.velocity.x;
+            }
+
+            // Improved dash handling with momentum preservation
+            if (isDashing) {
+                dashProgress += 1 / DASH_DURATION;
+                const progress = Math.min(dashProgress, 1);
+                
+                // Calculate dash velocity based on direction
+                const dashVelocity = player.facingRight ? DASH_SPEED : -DASH_SPEED;
+                
+                // Add current movement to dash velocity
+                let combinedVelocity = dashVelocity;
+                if (keys.left) combinedVelocity -= MOVE_SPEED;
+                if (keys.right) combinedVelocity += MOVE_SPEED;
+                
+                // Apply the combined velocity
+                player.velocity.x = combinedVelocity;
+                player.position.x += player.velocity.x;
+
+                if (dashProgress >= 1) {
+                    isDashing = false;
+                    dashProgress = 0;
+                    // Preserve the directional momentum after dash
+                    if (keys.left) {
+                        currentVelocityX = -MOVE_SPEED;
+                    } else if (keys.right) {
+                        currentVelocityX = MOVE_SPEED;
+                    }
+                    player.velocity.x = currentVelocityX;
+                }
+            }
+
+            // Apply gravity and vertical movement
+            player.velocity.y += GRAVITY;
+            player.position.y += player.velocity.y;
+
+            // Platform collisions
+            isOnGround = false;
+            platforms.forEach(platform => {
+                if (player.intersects(platform)) {
+                    // Get the overlap on each axis
+                    const overlapX = Math.min(
+                        Math.abs(player.position.x + player.width - platform.position.x),
+                        Math.abs(platform.position.x + platform.width - player.position.x)
+                    );
+                    const overlapY = Math.min(
+                        Math.abs(player.position.y + player.height - platform.position.y),
+                        Math.abs(platform.position.y + platform.height - player.position.y)
+                    );
+
+                    // Determine if collision is more horizontal or vertical
+                    if (overlapX < overlapY) {
+                        // Horizontal collision
+                        if (player.position.x < platform.position.x) {
+                            player.position.x = platform.position.x - player.width;
+                        } else {
+                            player.position.x = platform.position.x + platform.width;
+                        }
+                        // Don't reset velocity on horizontal collision
+                        if (isDashing) {
+                            isDashing = false;
+                            // Preserve momentum in the appropriate direction
+                            currentVelocityX = player.facingRight ? MOVE_SPEED : -MOVE_SPEED;
+                            player.velocity.x = currentVelocityX;
+                        }
+                    } else {
+                        // Vertical collision
+                        if (player.position.y < platform.position.y) {
+                            player.position.y = platform.position.y - player.height;
+                            player.velocity.y = 0;
+                            isOnGround = true;
+                            canDoubleJump = true;
+                            canDash = true;
+                        } else {
+                            player.position.y = platform.position.y + platform.height;
+                            player.velocity.y = 0;
+                        }
+                    }
+                }
+            });
+
+            // Quick level transition when hitting goal
+            if (goal && player.intersects(goal)) {
+                const oldPlayer = player;
+                player = null;
+                
+                // Immediate cleanup
+                platforms.forEach(p => p.remove());
+                lavaBlocks.forEach(l => l.remove());
+                platforms = [];
+                lavaBlocks = [];
+                
+                // Quick transition to next level
+                setTimeout(() => {
+                    oldPlayer.remove();
+                    currentLevel++;
+                    createLevel(currentLevel);
+                }, 100);
+                return;
+            }
+
+            // Lava collision handling
+            lavaBlocks.forEach(lava => {
+                if (player.intersects(lava)) {
+                    player.position = { ...spawnPoint };
+                    player.velocity = { x: 0, y: 0 };
+                    currentVelocityX = 0;
+                    canDash = true;
+                    canDoubleJump = true;
+                    isDashing = false;
+                    dashProgress = 0;
+                }
+            });
+
+            // Boundary checking
+            if (player.position.x < 0) {
+                player.position.x = 0;
+                currentVelocityX = 0;
+            }
+            if (player.position.x + player.width > 1200) {
+                player.position.x = 1200 - player.width;
+                currentVelocityX = 0;
+            }
+            if (player.position.y < 0) {
+                player.position.y = 0;
+                player.velocity.y = 0;
+            }
+            if (player.position.y > 800) {
+                player.position = { ...spawnPoint };
+                player.velocity = { x: 0, y: 0 };
+                currentVelocityX = 0;
+                isDashing = false;
+                dashProgress = 0;
+            }
+        }
+
+        // Event Listeners
+        document.addEventListener('keydown', (e) => {
+            switch(e.key.toLowerCase()) {  // Convert to lowercase for case-insensitive matching
+                case 'arrowleft':
+                case 'a':
+                    keys.left = true;
+                    break;
+                case 'arrowright':
+                case 'd':
+                    keys.right = true;
+                    break;
+                case 'arrowup':
+                case 'w':
+                case ' ':  // Also allow spacebar for jumping
+                    if (isOnGround) {
+                        player.velocity.y = -JUMP_FORCE;
+                    } else if (canDoubleJump) {
+                        player.velocity.y = -JUMP_FORCE;
+                        canDoubleJump = false;
+                    }
+                    break;
+                case 'c':
+                case 'm':
+                    if (!isDashing && canDash && player) {
+                        isDashing = true;
+                        canDash = false;
+                        dashProgress = 0;
+                        dashStartX = player.position.x;
+                        dashTargetX = player.position.x + (player.facingRight ? DASH_DISTANCE : -DASH_DISTANCE);
+                        player.element.classList.add('dashing');
+                        setTimeout(() => {
+                            player.element.classList.remove('dashing');
+                        }, 300);
+                    }
+                    break;
+                case 'r':
+                    localStorage.removeItem('customLevel');
+                    restartGame();
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.key.toLowerCase()) {  // Convert to lowercase for case-insensitive matching
+                case 'arrowleft':
+                case 'a':
+                    keys.left = false;
+                    break;
+                case 'arrowright':
+                case 'd':
+                    keys.right = false;
+                    break;
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const levelParam = urlParams.get('level');
+            
+            console.log("Initializing game with level parameter:", levelParam);
+            
+            if (levelParam === 'custom') {
+                console.log("Attempting to create custom level");
+                createLevel('custom');
+            } else {
+                console.log("Creating default first level");
+                currentLevel = 1;
+                createLevel(currentLevel);
+            }
+        });
+
+        document.getElementById('play-again').addEventListener('click', () => {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
+            document.getElementById('leaderboard-container').style.display = 'none';
+            document.getElementById('game-container').innerHTML = originalHtml;
+            currentLevel = 1;
+            hasGameStarted = false;
+            startTime = null;
+            hasSubmittedScore = false;  // Reset the submission flag
+            if (gameTimer) clearInterval(gameTimer);
+            createLevel(currentLevel);
+        });
+
+        // Initialize game
+        createLevel(1);
+        update();
     </script>
 </body>
 </html>
