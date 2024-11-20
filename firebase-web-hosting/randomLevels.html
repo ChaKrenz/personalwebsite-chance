@@ -290,11 +290,12 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
         const leaderboardRef = db.collection('platformer');
+        const levelsRef = db.collection('levels');
 
         // Store original HTML for reset
         const originalHtml = document.getElementById('game-container').innerHTML;
 
-        // Game Constants
+        // Keep all your existing game constants
         const GRAVITY = 0.7;
         const JUMP_FORCE = 13;
         const MOVE_SPEED = 7;
@@ -305,7 +306,7 @@
         const FIXED_DELTA_TIME = 1/60;
         const MAX_DELTA_TIME = 0.05;
 
-        // Game State Variables
+        // Game State Variables (keep all your existing variables)
         let username = localStorage.getItem('platformerUsername');
         let animationFrameId = null;
         let hasSubmittedScore = false;
@@ -321,7 +322,7 @@
         let startTime = null;
         let hasGameStarted = false;
         let finalTime = null;
-        let currentLevel = 1;
+        let currentLevel = null;
         let canDash = true;
         let spawnPoint = { x: 100, y: 100 };
         let canDoubleJump = true;
@@ -332,6 +333,7 @@
         let lavaBlocks = [];
         let goal = null;
 
+        // Keep your existing keys object
         const keys = {
             left: false,
             right: false,
@@ -513,164 +515,141 @@
             };
         }
 
-        async function createLevel(levelNumber, customLevelData = null) { 
-            console.log("CreateLevel called with:", {
-                levelNumber, 
-                customLevelData
-            });
-
-            // Cancel any existing animation frame
-            if (animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-                animationFrameId = null;
-            }
-
-            // Reset game state
-            resetGameState();
-
+        async function createLevel() {
             try {
-                // Fetch levels from Firestore
-                const levelsRef = db.collection('platformerLevels');
-                const querySnapshot = await levelsRef.get();
-                
-                // Check if any levels exist in the database
-                if (querySnapshot.empty) {
-                    throw new Error('No levels found in the database');
+                // Get total count of levels
+                const snapshot = await levelsRef.get();
+                if (snapshot.empty) {
+                    console.error('No levels found in database');
+                    return;
                 }
 
-                // Convert snapshot to array of levels
-                const levels = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
+                // Select a random level
+                const levels = snapshot.docs;
+                const randomLevel = levels[Math.floor(Math.random() * levels.length)].data();
 
-                // Randomly select a level
-                const randomLevel = levels[Math.floor(Math.random() * levels.length)];
+                // Clear existing level elements
+                platforms.forEach(p => p.remove());
+                lavaBlocks.forEach(l => l.remove());
+                if (goal) goal.remove();
 
-                // Update level display
-                document.getElementById('level-display').textContent = `Random Level: ${randomLevel.name || 'Unnamed'}`;
+                platforms = [];
+                lavaBlocks = [];
 
-                // Set up the level
-                setupLevel(randomLevel);
+                // Reset player states
+                canDoubleJump = true;
+                canDash = true;
+                isDashing = false;
+                dashProgress = 0;
+                currentVelocityX = 0;
+
+                // Create platforms from level data
+                if (randomLevel.platforms) {
+                    randomLevel.platforms.forEach(platformData => {
+                        const platform = new GameObject(
+                            platformData.x,
+                            platformData.y,
+                            platformData.width,
+                            platformData.height,
+                            'platform'
+                        );
+                        platforms.push(platform);
+                    });
+                }
+
+                // Create lava blocks from level data
+                if (randomLevel.lavaBlocks) {
+                    randomLevel.lavaBlocks.forEach(lavaData => {
+                        const lava = new GameObject(
+                            lavaData.x,
+                            lavaData.y,
+                            lavaData.width,
+                            lavaData.height,
+                            'lava'
+                        );
+                        lavaBlocks.push(lava);
+                    });
+                }
+
+                // Create goal
+                if (randomLevel.goal) {
+                    goal = new GameObject(
+                        randomLevel.goal.x,
+                        randomLevel.goal.y,
+                        randomLevel.goal.width || 50,
+                        randomLevel.goal.height || 50,
+                        'goal'
+                    );
+                }
+
+                // Store spawn point for the level
+                spawnPoint = {
+                    x: randomLevel.spawn.x,
+                    y: randomLevel.spawn.y
+                };
+
+                // Create player at spawn point
+                if (player) {
+                    player.remove();
+                }
+                player = new GameObject(
+                    spawnPoint.x,
+                    spawnPoint.y,
+                    30,  // Fixed player size
+                    30,  // Fixed player size
+                    'player'
+                );
+                player.velocity = { x: 0, y: 0 };
+
+                // Reset animation frame
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                }
+                lastTime = performance.now();
+                animationFrameId = requestAnimationFrame(update);
 
             } catch (error) {
-                console.error('Error loading level:', error);
-                throw error; // Rethrow to allow caller to handle the error
+                console.error('Error loading random level:', error);
             }
         }
 
-        function resetGameState() {
-            // Reset movement variables
-            currentVelocityX = 0;
-            lastTime = 0;
-            accumulatedTime = 0;
-
-            // Clear existing game objects
-            platforms.forEach(p => p.remove());
-            lavaBlocks.forEach(l => l.remove());
-            if (goal) goal.remove();
-            tutorialSigns.forEach(sign => sign.remove());
-
-            // Reset arrays
-            platforms = [];
-            lavaBlocks = [];
-            tutorialSigns = [];
-
+        // Function to reset player after death
+        function resetPlayer() {
             // Reset player states
             canDoubleJump = true;
             canDash = true;
             isDashing = false;
             dashProgress = 0;
-        }
+            currentVelocityX = 0;
 
-        function setupLevel(levelData) {
-            // Create platforms
-            levelData.platforms.forEach(platformData => {
-                const platform = new GameObject(
-                    platformData.x, 
-                    platformData.y, 
-                    platformData.width, 
-                    platformData.height, 
-                    'platform'
-                );
-                platforms.push(platform);
-            });
-
-            // Create lava blocks
-            if (levelData.lavaBlocks) {
-                levelData.lavaBlocks.forEach(lavaData => {
-                    const lava = new GameObject(
-                        lavaData.x, 
-                        lavaData.y, 
-                        lavaData.width, 
-                        lavaData.height, 
-                        'lava'
-                    );
-                    lavaBlocks.push(lava);
-                });
-            }
-
-            // Set spawn point
-            spawnPoint = {
-                x: levelData.spawn?.x || 100,
-                y: levelData.spawn?.y || 700
-            };
-
-            // Create goal
-            goal = levelData.goal 
-                ? new GameObject(
-                    levelData.goal.x, 
-                    levelData.goal.y, 
-                    levelData.goal.width, 
-                    levelData.goal.height, 
-                    'goal'
-                )
-                : new GameObject(1150, 700, 30, 30, 'goal');
-
-            // Create or reset player
+            // Reset player position to spawn point
             if (player) {
                 player.remove();
             }
-            player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
+            player = new GameObject(
+                spawnPoint.x,
+                spawnPoint.y,
+                30,
+                30,
+                'player'
+            );
             player.velocity = { x: 0, y: 0 };
-            
-            // Start game loop
-            if (!animationFrameId) {
-                lastTime = performance.now();
-                animationFrameId = requestAnimationFrame(update);
-            }
         }
 
-        // Helper function to create a default level if random level fails
-        function createDefaultLevel(levelNumber) {
-            console.log("Falling back to default level creation for:", levelNumber);
+        function restartGame() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
             
-            // Your existing createLevel logic for specific levels can be moved here
-            // This ensures you have a fallback if database fetch fails
-            switch(levelNumber) {
-                case 1:
-                    spawnPoint = { x: 100, y: 700 };
-                    platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
-                    goal = new GameObject(1150, 700, 30, 30, 'goal');
-                    break;
-                // Add other default level configurations as needed
-                default:
-                    spawnPoint = { x: 100, y: 700 };
-                    platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
-                    goal = new GameObject(1150, 700, 30, 30, 'goal');
-            }
-
-            // Create or reset player at spawn point
-            if (player) {
-                player.remove();
-            }
-            player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
-            player.velocity = { x: 0, y: 0 };
+            document.getElementById('leaderboard-container').style.display = 'none';
+            document.getElementById('game-container').innerHTML = originalHtml;
             
-            if (!animationFrameId) {
-                lastTime = performance.now();
-                animationFrameId = requestAnimationFrame(update);
-            }
+            hasGameStarted = false;
+            startTime = null;
+            hasSubmittedScore = false;
+            if (gameTimer) clearInterval(gameTimer);
+            createLevel();
         }
 
         async function loadSavedLevels() {
@@ -849,11 +828,10 @@
                 platforms = [];
                 lavaBlocks = [];
                 
-                // Quick transition to next level
+                // Load new random level
                 setTimeout(() => {
                     oldPlayer.remove();
-                    currentLevel++;
-                    createLevel(currentLevel);
+                    createLevel();
                 }, 100);
                 return;
             }
@@ -929,6 +907,7 @@
                     }
                     break;
                 case 'r':
+                    localStorage.removeItem('customLevel');
                     restartGame();
                     break;
             }
@@ -948,19 +927,7 @@
         });
         
         document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const levelParam = urlParams.get('level');
-            
-            console.log("Initializing game with level parameter:", levelParam);
-            
-            if (levelParam === 'custom') {
-                console.log("Attempting to create custom level");
-                createLevel('custom');
-            } else {
-                console.log("Creating default first level");
-                currentLevel = 1;
-                createLevel(currentLevel);
-            }
+            createLevel();
         });
 
         document.getElementById('play-again').addEventListener('click', () => {
@@ -971,16 +938,15 @@
             
             document.getElementById('leaderboard-container').style.display = 'none';
             document.getElementById('game-container').innerHTML = originalHtml;
-            currentLevel = 1;
             hasGameStarted = false;
             startTime = null;
-            hasSubmittedScore = false;  // Reset the submission flag
+            hasSubmittedScore = false;
             if (gameTimer) clearInterval(gameTimer);
-            createLevel(currentLevel);
+            createLevel();
         });
 
         // Initialize game
-        createLevel(1);
+        createLevel();
         update();
     </script>
 </body>

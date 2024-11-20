@@ -38,18 +38,93 @@
             border-radius: 5px;
             font-size: 18px;
             cursor: pointer;
+            transition: background 0.2s ease;
+            font-family: monospace;
         }
 
         .menu-button:hover {
             background: #45a049;
         }
+
+        .animation-container {
+            width: 300px;
+            height: 150px;
+            position: relative;
+            margin-bottom: 20px;
+            overflow: hidden;
+            background: #1a1a1a;
+            border-radius: 5px;
+            border: 2px solid #333;
+        }
+
+        .player-animation {
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            position: absolute;
+            border-radius: 5px;
+            bottom: 30px;
+            animation: movePlayer 3s infinite linear;
+        }
+
+        .player-animation::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #2E7D32;
+            border-radius: 50%;
+            top: 50%;
+            right: 2px;
+            transform: translateY(-50%);
+        }
+
+        .goal-animation {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            border-radius: 50%;
+            bottom: 30px;
+            right: 30px;
+            animation: pulse 2s infinite;
+        }
+
+        .platform-animation {
+            position: absolute;
+            height: 10px;
+            background: #666;
+            bottom: 20px;
+            width: 100%;
+            border-radius: 3px;
+        }
+
+        @keyframes movePlayer {
+            0% { left: 30px; bottom: 30px; }
+            40% { left: 120px; bottom: 30px; }
+            50% { left: 150px; bottom: 100px; }
+            60% { left: 180px; bottom: 30px; }
+            100% { left: 240px; bottom: 30px; }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body>
     <div class="menu-container">
+        <div class="animation-container">
+            <div class="platform-animation"></div>
+            <div class="player-animation"></div>
+            <div class="goal-animation"></div>
+        </div>
         <div class="menu-title">PLATFORMER</div>
-        <button class="menu-button" onclick="startOriginalGame()">Originial Platformer</button>
-        <button class="menu-button" onclick="startNewGame()">Level Creator</button>
+        <button class="menu-button" onclick="startOriginalGame()">Original Platformer</button>
+        <button class="menu-button" onclick="startLevelCreator()">Level Creator</button>
+        <button class="menu-button" onclick="startRandomLevels()">Random Levels</button>
     </div>
 
     <script>
@@ -57,8 +132,12 @@
             window.location.href = 'platformer.html';
         }
 
-        function startNewGame() {
+        function startLevelCreator() {
             window.location.href = 'levelcreator.html';
+        }
+
+        function startRandomLevels() {
+            window.location.href = 'randomLevels.html';
         }
     </script>
 </body>
