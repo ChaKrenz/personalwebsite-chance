@@ -766,7 +766,7 @@
 
                 switch(levelNumber) {
                     case 1: // Basic movement tutorial
-                        spawnPoint = { x: 100, y: 700 };
+                        currentLevelStartTime = null;
                         // Base platform with small gaps to practice basic movement
                         platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
 
@@ -927,8 +927,8 @@
                 animationFrameId = null;
             }
 
+            spawnPoint = { x: 100, y: 700 };
             levelSplits = [];
-            currentLevelStartTime = null;
             
             document.getElementById('leaderboard-container').style.display = 'none';
             document.getElementById('game-container').innerHTML = originalHtml;
@@ -985,6 +985,7 @@
 
             // Start timer on first input (now including dash)
             if (!hasGameStarted && (keys.left || keys.right || keys.up || isDashing)) {
+                currentLevelStartTime = Date.now();
                 hasGameStarted = true;
                 startTime = Date.now();
                 gameTimer = setInterval(() => {
