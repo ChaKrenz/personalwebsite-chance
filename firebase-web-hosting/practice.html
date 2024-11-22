@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gadget Runner Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: monospace;
+            color: white;
+        }
+
+        #game-container {
+            width: 1200px;
+            height: 800px;
+            position: relative;
+            margin: 0 auto;
+            background: #1a1a1a;
+        }
+
+        .player {
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            position: absolute;
+            border-radius: 5px;
+        }
+
+        .platform {
+            position: absolute;
+            background: #666;
+            border-radius: 3px;
+        }
+
+        .lava {
+            position: absolute;
+            background: #ff4444;
+            border-radius: 3px;
+        }
+
+        .goal {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background: #4CAF50;
+            border-radius: 50%;
+        }
+
+        #timer {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+        }
+
+        .menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        .button:hover {
+            background: #45a049;
+        }
+
+        .back-button {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #level-display {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+        }
+
+        #timer-display {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            font-size: 24px;
+        }
+        #splits-container {
+            position: fixed;
+            right: 10px;
+            top: 50px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            color: white;
+            font-family: monospace;
+        }
+
+        .splits-table {
+            border-collapse: collapse;
+            width: 200px;
+            margin-bottom: 10px;  /* Added margin for best time display */
+        }
+
+        .splits-table th,
+        .splits-table td {
+            padding: 5px;
+            text-align: right;
+            border-bottom: 1px solid #444;
+        }
+
+        .splits-table th:first-child,
+        .splits-table td:first-child {
+            text-align: left;
+        }
+
+        .best-split {
+            color: #4CAF50;
+        }
+
+        #best-time {
+            text-align: center;
+            padding-top: 10px;
+            border-top: 1px solid #444;
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="menu" class="menu">
+            <h1>Level Select</h1>
+            <div id="level-buttons"></div>
+        </div>
+        <div id="level-display"></div>
+        <div id="timer-display">Time: 00:00.00</div>
+    </div>
+    <div id="splits-container">
+        <h3>Splits</h3>
+        <table class="splits-table">
+            <thead>
+                <tr>
+                    <th>Attempt</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody id="splits-body">
+            </tbody>
+        </table>
+        <div id="best-time"></div>
+    </div>
+
+    <script>
+        // Game Constants
+        const GRAVITY = 0.7;
+        const JUMP_FORCE = 13;
+        const MOVE_SPEED = 7;
+        const DASH_SPEED = 12;
+        const DASH_DURATION = 8;
+        const MOVEMENT_SMOOTHING = 0.85;
+        const FIXED_DELTA_TIME = 1/60;
+        const MAX_DELTA_TIME = 0.05;
+
+        // Game State Variables
+        let animationFrameId = null;
+        let lastTime = 0;
+        let currentVelocityX = 0;
+        let accumulatedTime = 0;
+        let isDashing = false;
+        let dashProgress = 0;
+        let gameTimer = null;
+        let startTime = null;
+        let hasGameStarted = false;
+        let currentLevel = 1;
+        let canDash = true;
+        let spawnPoint = { x: 100, y: 100 };
+        let canDoubleJump = true;
+        let player = null;
+        let isOnGround = false;
+        let platforms = [];
+        let lavaBlocks = [];
+        let goal = null;
+        let splitsData = [];
+        let bestSplit = Infinity;
+        let attemptCount = 0;
+
+        const keys = {
+            left: false,
+            right: false,
+            up: false
+        };
+
+        // GameObject Class
+        class GameObject {
+            constructor(x, y, width, height, className) {
+                this.position = { x, y };
+                this.velocity = { x: 0, y: 0 };
+                this.width = width;
+                this.height = height;
+                this.facingRight = true;
+
+                this.element = document.createElement('div');
+                this.element.className = className;
+                this.element.style.width = `${width}px`;
+                this.element.style.height = `${height}px`;
+                
+                if (className === 'player') {
+                    this.element.classList.add('facing-right');
+                }
+                
+                document.getElementById('game-container').appendChild(this.element);
+                this.updatePosition();
+            }
+
+            updatePosition() {
+                this.element.style.left = `${this.position.x}px`;
+                this.element.style.top = `${this.position.y}px`;
+            }
+
+            setDirection(facingRight) {
+                if (this.facingRight !== facingRight) {
+                    this.facingRight = facingRight;
+                    this.element.classList.remove('facing-right', 'facing-left');
+                    this.element.classList.add(facingRight ? 'facing-right' : 'facing-left');
+                }
+            }
+
+            remove() {
+                this.element.remove();
+            }
+
+            intersects(other) {
+                return this.position.x < other.position.x + other.width &&
+                    this.position.x + this.width > other.position.x &&
+                    this.position.y < other.position.y + other.height &&
+                    this.position.y + this.height > other.position.y;
+            }
+        }
+
+        // Menu Functions
+        function showMenu() {
+            const gameContainer = document.getElementById('game-container');
+            const menuHtml = `
+                <div id="menu" class="menu">
+                    <h1>Level Select</h1>
+                    <div id="level-buttons">
+                        ${Array.from({length: 10}, (_, i) => 
+                            `<button class="button" onclick="startLevel(${i + 1})">Level ${i + 1}</button>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+            gameContainer.innerHTML = menuHtml;
+            
+            // Add the necessary display elements back
+            const levelDisplay = document.createElement('div');
+            levelDisplay.id = 'level-display';
+            gameContainer.appendChild(levelDisplay);
+            
+            const timerDisplay = document.createElement('div');
+            timerDisplay.id = 'timer-display';
+            timerDisplay.textContent = 'Time: 00:00.00';
+            gameContainer.appendChild(timerDisplay);
+            
+            // Clear splits data when returning to menu
+            splitsData = [];
+            bestSplit = Infinity;
+            attemptCount = 0;
+            updateSplits(0); // Update display to clear splits
+        }
+
+        function startLevel(levelNumber) {
+            // Clear the menu
+            const menu = document.getElementById('menu');
+            if (menu) menu.remove();
+            
+            currentLevel = levelNumber;
+            resetGameState();
+            createLevel(levelNumber);
+            
+            // Reset splits data for new level
+            splitsData = [];
+            bestSplit = Infinity;
+            attemptCount = 0;
+            
+            // Add back to menu button
+            const backButton = document.createElement('button');
+            backButton.textContent = 'Back to Menu';
+            backButton.className = 'back-button';
+            backButton.onclick = () => {
+                if (gameTimer) {
+                    clearInterval(gameTimer);
+                }
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                }
+                
+                // Clear all game elements
+                const gameContainer = document.getElementById('game-container');
+                gameContainer.innerHTML = '';
+                
+                showMenu();
+            };
+            document.getElementById('game-container').appendChild(backButton);
+        }
+
+        function updateSplits(time) {
+            if (time > 0) {  // Only add non-zero times to splits
+                attemptCount++;
+                splitsData.push({
+                    attempt: attemptCount,
+                    time: time
+                });
+                
+                // Update best split
+                if (time < bestSplit) {
+                    bestSplit = time;
+                }
+            }
+            
+            // Update splits table
+            const splitsBody = document.getElementById('splits-body');
+            splitsBody.innerHTML = '';
+            
+            // Show last 10 splits only
+            const recentSplits = splitsData.slice(-10);
+            recentSplits.forEach(split => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${split.attempt}</td>
+                    <td class="${split.time === bestSplit ? 'best-split' : ''}">${formatTime(split.time)}</td>
+                `;
+                splitsBody.appendChild(row);
+            });
+
+            // Update best time display
+            const bestTimeElement = document.getElementById('best-time');
+            if (bestSplit !== Infinity) {
+                bestTimeElement.textContent = `Best: ${formatTime(bestSplit)}`;
+            } else {
+                bestTimeElement.textContent = '';
+            }
+        }
+
+        function resetTimer() {
+            if (gameTimer) {
+                clearInterval(gameTimer);
+                gameTimer = null;
+            }
+            hasGameStarted = false;
+            startTime = null;
+            document.getElementById('timer-display').textContent = 'Time: 00:00.00';
+        }
+
+        function resetGameState() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
+            if (gameTimer) {
+                clearInterval(gameTimer);
+                gameTimer = null;
+            }
+            
+            // Reset all game variables
+            currentVelocityX = 0;
+            lastTime = 0;
+            accumulatedTime = 0;
+            isDashing = false;
+            dashProgress = 0;
+            startTime = null;
+            hasGameStarted = false;
+            canDash = true;
+            canDoubleJump = true;
+            isOnGround = false;
+            
+            // Clear existing level elements
+            platforms.forEach(p => p.remove());
+            lavaBlocks.forEach(l => l.remove());
+            if (goal) goal.remove();
+            if (player) player.remove();
+            
+            platforms = [];
+            lavaBlocks = [];
+            goal = null;
+            player = null;
+            
+            // Reset timer display
+            document.getElementById('timer-display').textContent = 'Time: 00:00.00';
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = ms / 1000;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = Math.floor(totalSeconds % 60);
+            const milliseconds = Math.floor((ms % 1000) / 10);
+            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+        }
+
+        function createLevel(levelNumber) {
+            document.getElementById('level-display').textContent = `Level ${levelNumber}`;
+            
+            switch(levelNumber) {
+                case 1: // Basic movement tutorial
+                        currentLevelStartTime = null;
+                        // Base platform with small gaps to practice basic movement
+                        platforms.push(new GameObject(0, 750, 1200, 20, 'platform'));
+                        goal = new GameObject(1150, 700, 30, 30, 'goal');
+                        break;
+
+                    case 2: // Jump tutorial
+                        spawnPoint = { x: 100, y: 700 };
+                        // Platforms with increasing heights
+                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                        platforms.push(new GameObject(400, 700, 200, 20, 'platform'));
+                        platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
+                        goal = new GameObject(800, 550, 30, 30, 'goal');
+                        break;
+
+                    case 3: // Double jump tutorial
+                        spawnPoint = { x: 100, y: 700 };
+                        // One main platform and a very high platform
+                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                        platforms.push(new GameObject(700, 600, 200, 20, 'platform'));
+                        goal = new GameObject(800, 550, 30, 30, 'goal');
+                        break;
+
+                    case 4: // Dash tutorial
+                        spawnPoint = { x: 100, y: 700 };
+                        // Platforms with a large gap that requires dashing
+                        platforms.push(new GameObject(0, 750, 300, 20, 'platform'));
+                        platforms.push(new GameObject(900, 750, 300, 20, 'platform'));
+                        
+                        // Lava pit to show consequence of failure
+                        lavaBlocks.push(new GameObject(300, 770, 600, 30, 'lava'));
+                        goal = new GameObject(1000, 700, 30, 30, 'goal');
+                        break;
+
+                    case 5: // Combining jumps and dashes
+                        spawnPoint = { x: 50, y: 700 };
+                        // Platforms requiring both mechanics
+                        platforms.push(new GameObject(0, 750, 200, 20, 'platform'));
+                        platforms.push(new GameObject(400, 650, 150, 20, 'platform'));
+                        platforms.push(new GameObject(800, 550, 150, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        goal = new GameObject(850, 500, 30, 30, 'goal');
+                        break;
+
+                    case 6: // Precision jumping
+                        spawnPoint = { x: 50, y: 700 };
+                        // Small platforms in a zigzag pattern
+                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                        platforms.push(new GameObject(300, 650, 100, 20, 'platform'));
+                        platforms.push(new GameObject(600, 550, 100, 20, 'platform'));
+                        platforms.push(new GameObject(300, 450, 100, 20, 'platform'));
+                        platforms.push(new GameObject(600, 350, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        goal = new GameObject(650, 300, 30, 30, 'goal');
+                        break;
+
+                    case 7: // Speed and timing
+                        spawnPoint = { x: 50, y: 700 };
+                        // Platforms with precise dash timing needed
+                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                        platforms.push(new GameObject(400, 750, 100, 20, 'platform'));
+                        platforms.push(new GameObject(800, 650, 100, 20, 'platform'));
+                        platforms.push(new GameObject(400, 550, 100, 20, 'platform'));
+                        platforms.push(new GameObject(0, 450, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(500, 670, 300, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(100, 570, 300, 30, 'lava'));
+                        
+                        goal = new GameObject(50, 400, 30, 30, 'goal');
+                        break;
+
+                    case 8: // Aerial control
+                        spawnPoint = { x: 50, y: 700 };
+                        // Floating platforms requiring precise aerial control
+                        platforms.push(new GameObject(0, 750, 100, 20, 'platform'));
+                        platforms.push(new GameObject(200, 650, 80, 20, 'platform'));
+                        platforms.push(new GameObject(400, 550, 80, 20, 'platform'));
+                        platforms.push(new GameObject(600, 450, 80, 20, 'platform'));
+                        platforms.push(new GameObject(800, 350, 80, 20, 'platform'));
+                        platforms.push(new GameObject(1000, 250, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        goal = new GameObject(1050, 200, 30, 30, 'goal');
+                        break;
+
+                    case 9: // Complex movement
+                        spawnPoint = { x: 50, y: 700 };
+                        // Mix of all mechanics with tight timing
+                        platforms.push(new GameObject(0, 750, 150, 20, 'platform'));
+                        platforms.push(new GameObject(300, 650, 80, 20, 'platform'));
+                        platforms.push(new GameObject(600, 750, 80, 20, 'platform'));
+                        platforms.push(new GameObject(900, 650, 80, 20, 'platform'));
+                        platforms.push(new GameObject(1100, 550, 100, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(380, 670, 220, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(680, 670, 220, 30, 'lava'));
+                        
+                        goal = new GameObject(1150, 500, 30, 30, 'goal');
+                        break;
+
+                    case 10: // Ultimate challenge
+                        spawnPoint = { x: 50, y: 700 };
+                        // Final level using everything learned
+                        platforms.push(new GameObject(0, 750, 80, 20, 'platform'));
+                        platforms.push(new GameObject(200, 650, 60, 20, 'platform'));
+                        platforms.push(new GameObject(400, 550, 60, 20, 'platform'));
+                        platforms.push(new GameObject(700, 450, 60, 20, 'platform'));
+                        platforms.push(new GameObject(400, 350, 60, 20, 'platform'));
+                        platforms.push(new GameObject(100, 250, 60, 20, 'platform'));
+                        platforms.push(new GameObject(400, 150, 60, 20, 'platform'));
+                        
+                        lavaBlocks.push(new GameObject(0, 770, 1200, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(260, 670, 140, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(460, 570, 240, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(160, 470, 240, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(460, 370, 140, 30, 'lava'));
+                        lavaBlocks.push(new GameObject(160, 270, 240, 30, 'lava'));
+                        
+                        goal = new GameObject(420, 100, 30, 30, 'goal');
+                        break;
+            }
+            
+            // Create player at spawn point
+            player = new GameObject(spawnPoint.x, spawnPoint.y, 30, 30, 'player');
+            player.velocity = { x: 0, y: 0 };
+            
+            if (!animationFrameId) {
+                lastTime = performance.now();
+                animationFrameId = requestAnimationFrame(update);
+            }
+        }
+
+        function restartLevel() {
+            resetGameState();
+            createLevel(currentLevel);
+        }
+
+        // Game Loop Functions
+        function update(currentTime = 0) {
+            if (!player) return;
+
+            const deltaTime = Math.min((currentTime - lastTime) / 1000, MAX_DELTA_TIME);
+            lastTime = currentTime;
+            accumulatedTime += deltaTime;
+
+            // Start timer on first input
+            if (!hasGameStarted && (keys.left || keys.right || keys.up || isDashing)) {
+                hasGameStarted = true;
+                startTime = Date.now();
+                gameTimer = setInterval(() => {
+                    const currentTime = Date.now() - startTime;
+                    document.getElementById('timer-display').textContent = `Time: ${formatTime(currentTime)}`;
+                }, 10);
+            }
+
+            while (accumulatedTime >= FIXED_DELTA_TIME) {
+                updatePhysics(FIXED_DELTA_TIME);
+                accumulatedTime -= FIXED_DELTA_TIME;
+            }
+
+            player.updatePosition();
+            animationFrameId = requestAnimationFrame(update);
+        }
+
+        function updatePhysics(dt) {
+            if (!hasGameStarted && (keys.left || keys.right || keys.up)) {
+                hasGameStarted = true;
+                startTime = Date.now();
+                gameTimer = setInterval(() => {
+                    const currentTime = Date.now() - startTime;
+                    document.getElementById('timer-display').textContent = `Time: ${formatTime(currentTime)}`;
+                }, 10);
+            }
+
+            // Smoother movement handling
+            let targetVelocityX = 0;
+            if (!isDashing) {
+                if (keys.left) {
+                    targetVelocityX = -MOVE_SPEED;
+                    player.setDirection(false);
+                } else if (keys.right) {
+                    targetVelocityX = MOVE_SPEED;
+                    player.setDirection(true);
+                }
+
+                // Smooth velocity transition
+                currentVelocityX = currentVelocityX * MOVEMENT_SMOOTHING + targetVelocityX * (1 - MOVEMENT_SMOOTHING);
+                player.velocity.x = currentVelocityX;
+
+                // Update position directly with velocity
+                player.position.x += player.velocity.x;
+            }
+
+            // Improved dash handling with momentum preservation
+            if (isDashing) {
+                dashProgress += 1 / DASH_DURATION;
+                const progress = Math.min(dashProgress, 1);
+                
+                // Calculate dash velocity based on direction
+                const dashVelocity = player.facingRight ? DASH_SPEED : -DASH_SPEED;
+                
+                // Add current movement to dash velocity
+                let combinedVelocity = dashVelocity;
+                if (keys.left) combinedVelocity -= MOVE_SPEED;
+                if (keys.right) combinedVelocity += MOVE_SPEED;
+                
+                // Apply the combined velocity
+                player.velocity.x = combinedVelocity;
+                player.position.x += player.velocity.x;
+
+                if (dashProgress >= 1) {
+                    isDashing = false;
+                    dashProgress = 0;
+                    // Preserve the directional momentum after dash
+                    if (keys.left) {
+                        currentVelocityX = -MOVE_SPEED;
+                    } else if (keys.right) {
+                        currentVelocityX = MOVE_SPEED;
+                    }
+                    player.velocity.x = currentVelocityX;
+                }
+            }
+
+            // Apply gravity and vertical movement
+            player.velocity.y += GRAVITY;
+            player.position.y += player.velocity.y;
+
+            // Platform collisions
+            isOnGround = false;
+            platforms.forEach(platform => {
+                if (player.intersects(platform)) {
+                    // Get the overlap on each axis
+                    const overlapX = Math.min(
+                        Math.abs(player.position.x + player.width - platform.position.x),
+                        Math.abs(platform.position.x + platform.width - player.position.x)
+                    );
+                    const overlapY = Math.min(
+                        Math.abs(player.position.y + player.height - platform.position.y),
+                        Math.abs(platform.position.y + platform.height - player.position.y)
+                    );
+
+                    // Determine if collision is more horizontal or vertical
+                    if (overlapX < overlapY) {
+                        // Horizontal collision
+                        if (player.position.x < platform.position.x) {
+                            player.position.x = platform.position.x - player.width;
+                        } else {
+                            player.position.x = platform.position.x + platform.width;
+                        }
+                        // Don't reset velocity on horizontal collision
+                        if (isDashing) {
+                            isDashing = false;
+                            // Preserve momentum in the appropriate direction
+                            currentVelocityX = player.facingRight ? MOVE_SPEED : -MOVE_SPEED;
+                            player.velocity.x = currentVelocityX;
+                        }
+                    } else {
+                        // Vertical collision
+                        if (player.position.y < platform.position.y) {
+                            player.position.y = platform.position.y - player.height;
+                            player.velocity.y = 0;
+                            isOnGround = true;
+                            canDoubleJump = true;
+                            canDash = true;
+                        } else {
+                            player.position.y = platform.position.y + platform.height;
+                            player.velocity.y = 0;
+                        }
+                    }
+                }
+            });
+
+            // Quick level transition when hitting goal
+            if (goal && player.intersects(goal)) {
+                // Record split time
+                const endTime = Date.now();
+                const splitTime = endTime - startTime;
+                updateSplits(splitTime);
+                
+                // Reset player to start of same level
+                player.position = { ...spawnPoint };
+                player.velocity = { x: 0, y: 0 };
+                currentVelocityX = 0;
+                canDash = true;
+                canDoubleJump = true;
+                isDashing = false;
+                dashProgress = 0;
+                
+                // Reset timer
+                if (gameTimer) {
+                    clearInterval(gameTimer);
+                    gameTimer = null;
+                }
+                hasGameStarted = false;
+                startTime = null;
+                document.getElementById('timer-display').textContent = 'Time: 00:00.00';
+            }
+
+            // Lava collision handling
+            // Lava collision handling
+            lavaBlocks.forEach(lava => {
+                if (player.intersects(lava)) {
+                    player.position = { ...spawnPoint };
+                    player.velocity = { x: 0, y: 0 };
+                    currentVelocityX = 0;
+                    canDash = true;
+                    canDoubleJump = true;
+                    isDashing = false;
+                    dashProgress = 0;
+                    resetTimer(); // Reset timer on death
+                }
+            });
+
+            // Boundary checking
+            if (player.position.x < 0) {
+                player.position.x = 0;
+                currentVelocityX = 0;
+            }
+            if (player.position.x + player.width > 1200) {
+                player.position.x = 1200 - player.width;
+                currentVelocityX = 0;
+            }
+            if (player.position.y < 0) {
+                player.position.y = 0;
+                player.velocity.y = 0;
+            }
+            if (player.position.y > 800) {
+                player.position = { ...spawnPoint };
+                player.velocity = { x: 0, y: 0 };
+                currentVelocityX = 0;
+                isDashing = false;
+                dashProgress = 0;
+                resetTimer(); // Reset timer when falling off
+            }
+        }
+
+        // Event Listeners
+        document.addEventListener('keydown', (e) => {
+            switch(e.key.toLowerCase()) {
+                case 'arrowleft':
+                case 'a':
+                    keys.left = true;
+                    break;
+                case 'arrowright':
+                case 'd':
+                    keys.right = true;
+                    break;
+                case 'arrowup':
+                case 'w':
+                case ' ':
+                    if (isOnGround) {
+                        player.velocity.y = -JUMP_FORCE;
+                    } else if (canDoubleJump) {
+                        player.velocity.y = -JUMP_FORCE;
+                        canDoubleJump = false;
+                    }
+                    break;
+                case 'c':
+                case 'm':
+                    if (!isDashing && canDash && player) {
+                        isDashing = true;
+                        canDash = false;
+                        dashProgress = 0;
+                        player.element.classList.add('dashing');
+                        setTimeout(() => {
+                            player.element.classList.remove('dashing');
+                        }, 300);
+                    }
+                    break;
+                case 'r':
+                    restartLevel();
+                    break;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            switch(e.key.toLowerCase()) {
+                case 'arrowleft':
+                case 'a':
+                    keys.left = false;
+                    break;
+                case 'arrowright':
+                case 'd':
+                    keys.right = false;
+                    break;
+            }
+        });
+
+        // Initialize game with menu
+        document.addEventListener('DOMContentLoaded', showMenu);
+    </script>
+</body>
+</html>
