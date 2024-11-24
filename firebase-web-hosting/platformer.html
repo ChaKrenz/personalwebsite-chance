@@ -471,7 +471,7 @@
                 querySnapshot.docs.forEach(doc => {
                     const data = doc.data();
                     // Only consider times that are 14 seconds or more
-                    if (data.time >= 14000) {
+                    if (data.time >= 13000) {
                         const currentBestTime = userBestTimes.get(data.username);
                         
                         // Update the map only if this is a better time or first time for the user
@@ -555,9 +555,9 @@
                 return;
             }
 
-            // Check if time is under 14 seconds (14000 milliseconds)
-            if (time < 14000) {
-                console.log("Time under 14 seconds detected - score not submitted");
+            // Check if time is under 13 seconds (13000 milliseconds)
+            if (time < 13000) {
+                console.log("Time under 13 seconds detected - score not submitted");
                 showLeaderboard(time);
                 return;
             }
