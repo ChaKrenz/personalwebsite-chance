@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Parkour</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #fff;
+        }
+        canvas { width: 100%; height: 100%; }
+        #menu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #menu button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 18px;
+        }
+        #color-select {
+            margin: 10px;
+            padding: 5px;
+        }
+        #sprint-meter {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 200px;
+            height: 20px;
+            background: #333;
+            border: 2px solid #fff;
+        }
+        #sprint-progress {
+            width: 100%;
+            height: 100%;
+            background: #4CAF50;
+            transition: width 0.1s linear;
+        }
+        #checkpoint-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            display: none;
+        }
+        #level-display {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 20px;
+        }
+        #timer-display {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 20px;
+        }
+        #final-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="menu">
+        <h1>3D Parkour</h1>
+        <button id="start-game">Start Game</button>
+        <button id="show-controls">Show Controls</button>
+        <div id="controls-info" style="display:none; color: white; text-align: center; margin-top: 20px;">
+            <h3>Controls</h3>
+            <p>SHIFT - Sprint</p>
+            <p>W - Forward</p>
+            <p>A - Left</p>
+            <p>D - Right</p>
+            <p>S - Backward</p>
+            <p>SPACE - Jump</p>
+            <h3>Rules</h3>
+            <p>You must stand on the checkpoint platform to move onto the next level.</p>
+        </div>
+        <label for="background-color">Background Color:</label>
+        <select id="color-select">
+            <option value="#FFFFFF">White</option>
+            <option value="#87CEEB">Sky Blue</option>
+            <option value="#000000">Black</option>
+            <option value="#2F4F4F">Dark Slate Gray</option>
+            <option value="#191970">Midnight Blue</option>
+        </select>
+    </div>
+    <div id="sprint-meter">
+        <div id="sprint-progress"></div>
+    </div>
+    <div id="checkpoint-message">Level Complete!</div>
+    <div id="level-display">Level: 1</div>
+    <div id="timer-display">Time: 0:00</div>
+    <div id="final-screen">
+        <h1>Game Completed!</h1>
+        <p id="final-time">Final Time: 0:00</p>
+        <button id="restart-game">Play Again</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Game timer variables
+        let startTime;
+        let timerInterval;
+        let totalTime = 0;
+
+        // Get DOM elements
+        const menuElement = document.getElementById('menu');
+        const startGameButton = document.getElementById('start-game');
+        const showControlsButton = document.getElementById('show-controls');
+        const controlsInfo = document.getElementById('controls-info');
+        const colorSelect = document.getElementById('color-select');
+        const timerDisplay = document.getElementById('timer-display');
+        const finalScreen = document.getElementById('final-screen');
+        const finalTimeElement = document.getElementById('final-time');
+        const restartGameButton = document.getElementById('restart-game');
+        const sprintProgressElement = document.getElementById('sprint-progress');
+        const levelDisplayElement = document.getElementById('level-display');
+
+        // Controls button event listener
+        showControlsButton.addEventListener('click', () => {
+            if (controlsInfo.style.display === 'none') {
+                controlsInfo.style.display = 'block';
+            } else {
+                controlsInfo.style.display = 'none';
+            }
+        });
+
+        // Prevent default browser behavior
+        document.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Create scene, camera, and renderer BEFORE startGame function
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(1, 1, 1);
+        scene.add(directionalLight);
+
+        // Levels array will be copied here
+        const levels = [
+            // Level 1 - Simple Straight Path (revised)
+            [
+                { pos: [30, 0, 0], size: [40, 1, 5], color: 0x444444 }, // Single long platform
+                { pos: [60, 0, 0], size: [10, 1, 5], color: 0x00ff00 } // Checkpoint platform
+            ],
+            
+            // Level 2 - Basic jumps (adjusted spacing for better flow)
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [7, 1, 0], size: [4, 1, 4], color: 0x666666 },
+                { pos: [14, 1, 0], size: [4, 1, 4], color: 0x666666 },
+                { pos: [22, 1, 0], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 3 - Introduced moving platforms
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [10, 2, -3], size: [3, 1, 3], color: 0x666666, moving: { axis: 'x', range: 5, speed: 1 } },
+                { pos: [20, 4, 3], size: [3, 1, 3], color: 0x666666, moving: { axis: 'z', range: 3, speed: 1 } },
+                { pos: [30, 6, 0], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 4 - Curved path (improved diagonal feel)
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [8, 1, 8], size: [3, 1, 3], color: 0x666666 },
+                { pos: [16, 2, 16], size: [3, 1, 3], color: 0x666666 },
+                { pos: [24, 3, 24], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 5 - Alternating heights (adjusted difficulty)
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [10, 2, -2], size: [3, 1, 3], color: 0x666666 },
+                { pos: [20, 0, 2], size: [3, 1, 3], color: 0x666666 },
+                { pos: [30, 3, 0], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 6 - Introduced wide gaps (better variety)
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [12, 2, -3], size: [3, 1, 3], color: 0x666666 },
+                { pos: [24, 2, 3], size: [3, 1, 3], color: 0x666666 },
+                { pos: [36, 4, 0], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 7 - Added mid-platform branching paths
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [10, 2, -5], size: [3, 1, 3], color: 0x666666 },
+                { pos: [10, 2, 5], size: [3, 1, 3], color: 0x666666 },
+                { pos: [20, 4, 0], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 8 - Zig-zag paths for 3D challenge
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [10, 0, 3], size: [2, 1, 2], color: 0x666666 },
+                { pos: [20, 0, -3], size: [2, 1, 2], color: 0x666666 },
+                { pos: [30, 0, 3], size: [2, 1, 2], color: 0x666666 },
+                { pos: [40, 0, -3], size: [2, 1, 2], color: 0x666666 },
+                { pos: [50, 0, 0], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 9 - Tight maze (revised layout)
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [8, 0, 8], size: [3, 1, 3], color: 0x666666 },
+                { pos: [16, 0, -8], size: [3, 1, 3], color: 0x666666 },
+                { pos: [24, 0, 4], size: [3, 1, 3], color: 0x666666 },
+                { pos: [32, 0, -4], size: [3, 1, 3], color: 0x666666 },
+                { pos: [40, 0, 0], size: [5, 1, 5], color: 0x00ff00 }
+            ],
+
+            // Level 10 - Ultimate precision test (tightened layout)
+            [
+                { pos: [0, 0, 0], size: [5, 1, 5], color: 0x444444 },
+                { pos: [10, 0, -4], size: [2, 1, 2], color: 0x666666 },
+                { pos: [20, 0, 4], size: [2, 1, 2], color: 0x666666 },
+                { pos: [30, 0, -4], size: [2, 1, 2], color: 0x666666 },
+                { pos: [40, 0, 4], size: [2, 1, 2], color: 0x666666 },
+                { pos: [50, 0, 0], size: [3, 1, 3], color: 0x666666 },
+                { pos: [55, 0, 0], size: [10, 1, 4], color: 0x00ff00 }
+            ]
+        ];
+
+
+        // Player configuration
+        const player = {
+            height: 2,
+            maxSpeed: 0.15,
+            maxSprintSpeed: 0.25,
+            acceleration: 0.008,
+            sprintAcceleration: 0.012,
+            jumpForce: 0.4,
+            gravity: 0.02,
+            velocity: new THREE.Vector3(),
+            canJump: true,
+            sprinting: false,
+            sprintEnergy: 100,
+            sprintDrain: 1,
+            sprintRecharge: 0.5,
+            position: new THREE.Vector3(0, 2, 0),
+            spawnPoint: new THREE.Vector3(0, 2, 0),
+            isGrounded: false,
+            groundFriction: 0.92,
+            airFriction: 0.99,
+            currentLevel: 1,
+            bobOffset: 0,
+            bobFrequency: 0.1,
+            bobAmount: 0.1,
+            canTransition: true,
+            voidY: -10
+        };
+
+        let currentPlatforms = [];
+
+        function loadLevel(levelNum) {
+            // Clear existing platforms
+            currentPlatforms.forEach(platform => scene.remove(platform));
+            currentPlatforms = [];
+
+            // Load new level
+            const levelData = levels[levelNum - 1];
+            levelData.forEach(platform => {
+                const geometry = new THREE.BoxGeometry(...platform.size);
+                const material = new THREE.MeshPhongMaterial({ color: platform.color });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(...platform.pos);
+                scene.add(mesh);
+                currentPlatforms.push(mesh);
+            });
+
+            // Reset player position
+            resetPlayerPosition();
+
+            // Point player towards the checkpoint platform
+            const finalPlatform = levelData[levelData.length - 1];
+            const [x, y, z] = finalPlatform.pos;
+            
+            // Calculate direction to checkpoint
+            const directionToCheckpoint = new THREE.Vector3(x, y, z).sub(player.position).normalize();
+            
+            // Set yaw and pitch to face the checkpoint
+            yaw = Math.atan2(directionToCheckpoint.x, directionToCheckpoint.z);
+            pitch = 0; // Reset pitch to horizontal
+
+            levelDisplayElement.textContent = `Level: ${levelNum}`;
+        }
+
+        // Start game function
+        function startGame() {
+            menuElement.style.display = 'none';
+            document.body.requestPointerLock();
+            
+            // Start timer
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+
+            // Load initial level explicitly here
+            loadLevel(player.currentLevel);
+        }
+
+        // Update timer function
+        function updateTimer() {
+            const currentTime = Date.now();
+            const elapsedTime = currentTime - startTime;
+            const minutes = Math.floor(elapsedTime / 60000);
+            const seconds = Math.floor((elapsedTime % 60000) / 1000);
+            timerDisplay.textContent = `Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // Stop timer function
+        function stopTimer() {
+            clearInterval(timerInterval);
+            totalTime = Date.now() - startTime;
+        }
+
+        // Restart game function
+        function restartGame() {
+            // Stop and reset timer
+            clearInterval(timerInterval);
+            startTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+            timerDisplay.textContent = 'Time: 0:00';
+            
+            // Hide final screen
+            finalScreen.style.display = 'none';
+            
+            // Reset game state
+            resetGame();
+        }
+
+        function resetGame() {
+            player.currentLevel = 1;
+            player.position.copy(player.spawnPoint);
+            loadLevel(player.currentLevel);
+            document.getElementById('level-display').textContent = 'Level: 1';
+        }
+
+        // Event listeners for menu and game controls
+        startGameButton.addEventListener('click', startGame);
+        colorSelect.addEventListener('change', (e) => {
+            scene.background = new THREE.Color(e.target.value);
+        });
+        restartGameButton.addEventListener('click', () => {
+            finalScreen.style.display = 'none';
+            restartGame();
+        });
+
+        // Controls
+        const keys = {};
+        let yaw = 0;
+        let pitch = 0;
+
+        document.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
+            // Reset game when 'r' is pressed
+            if (e.key.toLowerCase() === 'r') {
+                resetGame();
+            }
+        });
+        document.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        document.addEventListener('mousemove', e => {
+            // Only update camera if menu is not displayed
+            if (menuElement.style.display === 'none') {
+                yaw -= e.movementX * 0.002;
+                pitch -= e.movementY * 0.002;
+                pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+            }
+        });
+
+        document.addEventListener('click', () => {
+            if (menuElement.style.display === 'none') {
+                document.body.requestPointerLock();
+            }
+        });
+
+        function resetPlayerPosition() {
+            // Reset player to start of current level
+            const levelData = levels[player.currentLevel - 1];
+            const startPlatform = levelData[0];
+            const [x, y, z] = startPlatform.pos;
+            
+            player.position.set(x, y + player.height, z);
+            camera.position.copy(player.position);
+        }
+
+        // Collision detection
+        function checkCollision(position) {
+            const levelData = levels[player.currentLevel - 1];
+            for (const platform of levelData) {
+                const [x, y, z] = platform.pos;
+                const [width, height, depth] = platform.size;
+                
+                if (position.x >= x - width/2 && position.x <= x + width/2 &&
+                    position.z >= z - depth/2 && position.z <= z + depth/2 &&
+                    position.y <= y + height + player.height && position.y >= y + height) {
+                    return { collision: true, y: y + height + player.height, platform };
+                }
+            }
+            return { collision: false };
+        }
+
+        function checkCheckpoint(position) {
+            if (!player.canTransition) return false;
+            
+            const levelData = levels[player.currentLevel - 1];
+            const finalPlatform = levelData[levelData.length - 1];
+            const [x, y, z] = finalPlatform.pos;
+            const [width, height, depth] = finalPlatform.size;
+
+            // Stricter condition: player must be standing on the green platform
+            return (position.x >= x - width/2 && position.x <= x + width/2 &&
+                    position.z >= z - depth/2 && position.z <= z + depth/2 &&
+                    Math.abs(position.y - (y + height + player.height)) < 0.1);
+        }
+
+        function showCheckpointMessage() {
+            if (!player.canTransition) return;
+            
+            player.canTransition = false;
+            const message = document.getElementById('checkpoint-message');
+            message.style.display = 'block';
+            
+            setTimeout(() => {
+                message.style.display = 'none';
+                if (player.currentLevel < levels.length) {
+                    player.currentLevel++;
+                    loadLevel(player.currentLevel);
+                    setTimeout(() => {
+                        player.canTransition = true;
+                    }, 1000);
+                } else {
+                    // Game completed
+                    stopTimer();
+                    const minutes = Math.floor(totalTime / 60000);
+                    const seconds = Math.floor((totalTime % 60000) / 1000);
+                    finalTimeElement.textContent = `Final Time: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    finalScreen.style.display = 'flex';
+                }
+            }, 2000);
+        }
+
+        function updateViewBob() {
+            if (player.isGrounded && (keys['w'] || keys['s'] || keys['a'] || keys['d'])) {
+                const speed = player.sprinting ? 1.5 : 1;
+                player.bobOffset += player.bobFrequency * speed;
+                return Math.sin(player.bobOffset) * player.bobAmount;
+            }
+            return 0;
+        }
+
+        // Game loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Sprint meter management
+            if (keys['shift'] && player.sprintEnergy > 0 && (keys['w'] || keys['s'] || keys['a'] || keys['d'])) {
+                player.sprinting = true;
+                player.sprintEnergy = Math.max(0, player.sprintEnergy - player.sprintDrain);
+            } else {
+                player.sprinting = false;
+                player.sprintEnergy = Math.min(100, player.sprintEnergy + player.sprintRecharge);
+            }
+
+            sprintProgressElement.style.width = player.sprintEnergy + '%';
+
+            // Fixed movement direction calculations
+            const forward = new THREE.Vector3(
+                -Math.sin(yaw),
+                0,
+                -Math.cos(yaw)
+            );
+            const right = new THREE.Vector3(
+                Math.sin(yaw + Math.PI/2),
+                0,
+                Math.cos(yaw + Math.PI/2)
+            );
+
+            const moveSpeed = player.sprinting ? player.maxSprintSpeed : player.maxSpeed;
+            const currentAcceleration = player.sprinting ? player.sprintAcceleration : player.acceleration;
+
+            if (keys['w']) {
+                player.velocity.x += forward.x * currentAcceleration;
+                player.velocity.z += forward.z * currentAcceleration;
+            }
+            if (keys['s']) {
+                player.velocity.x -= forward.x * currentAcceleration;
+                player.velocity.z -= forward.z * currentAcceleration;
+            }
+            if (keys['a']) {
+                player.velocity.x -= right.x * currentAcceleration;
+                player.velocity.z -= right.z * currentAcceleration;
+            }
+            if (keys['d']) {
+                player.velocity.x += right.x * currentAcceleration;
+                player.velocity.z += right.z * currentAcceleration;
+            }
+
+            // Jump
+            if (keys[' '] && player.canJump && player.isGrounded) {
+                player.velocity.y = player.jumpForce;
+                player.canJump = false;
+                player.isGrounded = false;
+            }
+
+            // Apply gravity
+            player.velocity.y -= player.gravity;
+
+            // Apply friction
+            const friction = player.isGrounded ? player.groundFriction : player.airFriction;
+            player.velocity.x *= friction;
+            player.velocity.z *= friction;
+
+            // Update position
+            player.position.add(player.velocity);
+
+            // Check for collisions
+            const collision = checkCollision(player.position);
+            if (collision.collision) {
+                player.position.y = collision.y;
+                player.velocity.y = 0;
+                player.isGrounded = true;
+                player.canJump = true;
+            } else {
+                player.isGrounded = false;
+            }
+
+            // Check if player fell into the void
+            if (player.position.y < player.voidY) {
+                // Reset to spawn point
+                player.position.copy(player.spawnPoint);
+                player.velocity.set(0, 0, 0);
+            }
+
+            // Update camera position and rotation
+            camera.position.copy(player.position);
+            camera.rotation.order = 'YXZ';
+            camera.rotation.x = pitch;
+            camera.rotation.y = yaw;
+
+            // View bobbing
+            const bobAmount = updateViewBob();
+            camera.position.y += bobAmount;
+
+            // Check checkpoint
+            if (checkCheckpoint(player.position)) {
+                showCheckpointMessage();
+            }
+
+            // Render the scene
+            renderer.render(scene, camera);
+        }
+
+        // Initial scene setup
+        function initScene() {
+            // Define levels (this is a placeholder - to be added dynamically)
+            const levels = [
+                // Level 1 platforms: start platform, platforms, final checkpoint platform
+                [
+                    { pos: [0, 0, 0], size: [10, 1, 10], color: 0x00ff00 },  // Start platform (green)
+                    { pos: [5, 5, 10], size: [3, 1, 3], color: 0xcccccc },
+                    { pos: [10, 10, 20], size: [3, 1, 3], color: 0xcccccc },
+                    { pos: [15, 15, 30], size: [5, 1, 5], color: 0x00ff00 }  // Checkpoint platform (green)
+                ],
+                // Level 2 platforms (more challenging)
+                [
+                    { pos: [0, 0, 0], size: [10, 1, 10], color: 0x00ff00 },  // Start platform (green)
+                    { pos: [5, 5, 10], size: [2, 1, 2], color: 0xcccccc },
+                    { pos: [10, 10, 20], size: [1, 1, 1], color: 0xcccccc },
+                    { pos: [15, 15, 30], size: [3, 1, 3], color: 0x00ff00 }  // Checkpoint platform (green)
+                ],
+                // Level 3 platforms (most challenging)
+                [
+                    { pos: [0, 0, 0], size: [10, 1, 10], color: 0x00ff00 },  // Start platform (green)
+                    { pos: [5, 3, 10], size: [2, 1, 2], color: 0xcccccc },
+                    { pos: [10, 6, 20], size: [1, 1, 1], color: 0xcccccc },
+                    { pos: [15, 9, 30], size: [2, 1, 2], color: 0x00ff00 }  // Checkpoint platform (green)
+                ]
+            ];
+
+            // Expose levels to the global scope
+            window.levels = levels;
+        }
+
+        // Responsive rendering
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize the scene
+        initScene();
+
+        // Start the animation loop
+        animate();
+    </script>
+</body>
+</html>
