@@ -559,7 +559,7 @@
             ).normalize();
 
             // Update yaw to face the checkpoint
-            yaw = Math.atan2(direction.x, direction.z);
+            yaw = -Math.atan2(direction.x, direction.z);
         }
 
         // Update timer function
