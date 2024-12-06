@@ -2,13 +2,14 @@
 <html>
 <head>
     <title>3D Parkour</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body { 
             margin: 0; 
             overflow: hidden; 
-            font-family: Arial, sans-serif;
+            font-family: 'Press Start 2P', cursive;
             background-color: #000;
-            color: #fff;
+            color: #5d6f77;
         }
         canvas { width: 100%; height: 100%; }
         #menu {
@@ -17,17 +18,42 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.8);
+            background-color: rgba(0,0,0,0.9);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 1000;
+            text-shadow: 2px 2px 4px #6b7683;
+        }
+        #menu h1 {
+            font-size: 3rem;
+            margin-bottom: 2rem;
+            letter-spacing: 5px;
         }
         #menu button {
             margin: 10px;
             padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
             font-size: 18px;
+            background-color: #75898f;
+            color: black;
+            border: 3px solid #7d9b9b;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        #menu button:hover {
+            background-color: black;
+            color: #74918d;
+            box-shadow: 0 0 10px #769593;
+        }
+        #controls-info {
+            text-align: center;
+            background-color: rgba(0,50,0,0.7);
+            padding: 20px;
+            border: 2px solid #77938c;
+            margin-top: 20px;
+            color: white;
         }
         #color-select {
             margin: 10px;
@@ -85,6 +111,37 @@
             z-index: 1000;
             color: white;
         }
+        #leaderboard-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 2000;
+            color: white;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .leaderboard-entry {
+            display: flex;
+            justify-content: space-between;
+            width: 300px;
+            margin: 10px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+        }
+        .place {
+            font-weight: bold;
+        }
+        .gold { color: gold; }
+        .silver { color: silver; }
+        .bronze { color: #CD7F32; }
+        .current-score {
+            background-color: rgba(0,255,0,0.2);
+        }
     </style>
 </head>
 <body>
@@ -92,7 +149,7 @@
         <h1>3D Parkour</h1>
         <button id="start-game">Start Game</button>
         <button id="show-controls">Show Controls</button>
-        <div id="controls-info" style="display:none; color: white; text-align: center; margin-top: 20px;">
+        <div id="controls-info" style="display:none;">
             <h3>Controls</h3>
             <p>SHIFT - Sprint</p>
             <p>W - Forward</p>
@@ -105,7 +162,6 @@
         </div>
         <label for="background-color">Background Color:</label>
         <select id="color-select">
-            <option value="#FFFFFF">White</option>
             <option value="#87CEEB">Sky Blue</option>
             <option value="#000000">Black</option>
             <option value="#2F4F4F">Dark Slate Gray</option>
@@ -122,10 +178,118 @@
         <h1>Game Completed!</h1>
         <p id="final-time">Final Time: 0:00</p>
         <button id="restart-game">Play Again</button>
+        <button id="submit-score">Submit Score</button>
+        <button id="show-leaderboard">Leaderboard</button>
+    </div>
+    <div id="leaderboard-container">
+        <h2>Leaderboard</h2>
+        <div id="leaderboard-entries"></div>
+        <button id="close-leaderboard">Close</button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
     <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCKGX_pK2c0-XqFss9yxVmGUQOOk49IVC4",
+            authDomain: "personalwebsite-chance.firebaseapp.com",
+            projectId: "personalwebsite-chance",
+            storageBucket: "personalwebsite-chance.appspot.com",
+            messagingSenderId: "968150134907",
+            appId: "1:968150134907:web:b728c3aa41c92e929432de"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Global variables for leaderboard
+        let currentUser = null;
+
+        // Authentication
+        function signInAnonymously() {
+            firebase.auth().signInAnonymously()
+                .then((userCredential) => {
+                    currentUser = userCredential.user;
+                    console.log('Signed in anonymously');
+                })
+                .catch((error) => {
+                    console.error('Authentication error', error);
+                });
+        }
+
+        // Submit score to leaderboard
+        function submitScore(time, levelReached) {
+            if (!currentUser) {
+                console.error('User not authenticated');
+                return;
+            }
+
+            db.collection('platformerLeaderboard').add({
+                userId: currentUser.uid,
+                time: parseFloat(time.toFixed(2)),
+                level: levelReached,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            })
+            .then(() => {
+                console.log('Score submitted successfully');
+                fetchLeaderboard();
+            })
+            .catch((error) => {
+                console.error('Error submitting score', error);
+            });
+        }
+
+        // Fetch leaderboard
+        function fetchLeaderboard() {
+            db.collection('platformerLeaderboard')
+                .orderBy('time', 'asc')
+                .limit(10)
+                .get()
+                .then((querySnapshot) => {
+                    const leaderboardEntries = document.getElementById('leaderboard-entries');
+                    leaderboardEntries.innerHTML = ''; // Clear existing entries
+
+                    querySnapshot.forEach((doc, index) => {
+                        const data = doc.data();
+                        const row = leaderboardEntries.insertRow();
+                        row.insertCell(0).textContent = index + 1;
+                        row.insertCell(1).textContent = `Player ${data.userId.substring(0, 6)}`;
+                        row.insertCell(2).textContent = `${data.time}s (Level ${data.level})`;
+                    });
+                })
+                .catch((error) => {
+                    console.error('Error fetching leaderboard', error);
+                });
+        }
+
+        // Event Listeners for Leaderboard Modal
+        document.getElementById('show-leaderboard').addEventListener('click', () => {
+            fetchLeaderboard();
+            document.getElementById('leaderboard-modal').style.display = 'block';
+        });
+
+        document.getElementById('close-leaderboard').addEventListener('click', () => {
+            document.getElementById('leaderboard-modal').style.display = 'none';
+        });
+
+        // Sign in anonymously when the page loads
+        signInAnonymously();
+
+        // Modify your game's finish logic to submit score
+        function gameFinished(totalTime, currentLevel) {
+            submitScore(totalTime, currentLevel);
+            
+            // Existing final screen logic
+            finalTimeElement.textContent = `Total Time: ${totalTime.toFixed(2)}s`;
+            menuElement.style.display = 'none';
+            finalScreen.style.display = 'block';
+        }
+
         // Game timer variables
         let startTime;
         let timerInterval;
